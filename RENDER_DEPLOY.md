@@ -1,5 +1,21 @@
 # Despliegue en Render
 
+## 0. Version de Python obligatoria
+
+El fallo de build que viste ocurre porque Render esta usando Python `3.14.x`. Con esa version, `pydantic-core` puede intentar compilar Rust y fallar por una ruta de Cargo de solo lectura.
+
+Este repo incluye un archivo `.python-version` con:
+
+```text
+3.12.8
+```
+
+Si Render no lo detecta automaticamente, agrega esta variable en **Environment > Environment Variables**:
+
+```text
+PYTHON_VERSION -> 3.12.8
+```
+
 ## 1. Build Command exacto
 
 Pega este comando en **Build Command**:
@@ -24,9 +40,10 @@ Configura estas variables en **Environment > Environment Variables**:
 
 ```text
 QUOTEX_EMAIL -> Correo de inicio de sesion de la cuenta Quotex.
-QUOTEX_PASSWORD -> Contraseña de la cuenta Quotex.
+QUOTEX_PASSWORD -> Contrasena de la cuenta Quotex.
 TELEGRAM_BOT_TOKEN -> Token del bot creado en @BotFather.
 TELEGRAM_CHAT_ID -> ID del chat, usuario, grupo o canal donde recibiras las senales.
+PYTHON_VERSION -> 3.12.8, solo si Render no detecta el archivo .python-version.
 ```
 
 Variables opcionales:
