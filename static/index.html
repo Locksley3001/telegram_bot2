@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quotex Signals</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="markets-panel">
+        <header class="brand">
+          <span class="brand-mark">PO</span>
+          <div>
+            <h1>Binary Signals</h1>
+            <p id="brokerStatus">Iniciando</p>
+          </div>
+        </header>
+
+        <div class="field">
+          <label for="marketSearch">Buscar</label>
+          <input id="marketSearch" type="search" placeholder="EURUSD_otc" autocomplete="off" />
+        </div>
+
+        <form id="addMarketForm" class="add-row">
+          <input id="marketInput" type="text" placeholder="AUDCAD_otc" autocomplete="off" />
+          <button type="submit" title="Agregar mercado">+</button>
+        </form>
+
+        <div class="timeframe-row" id="timeframeRow" aria-label="Timeframes">
+          <button data-timeframe="30">30s</button>
+          <button data-timeframe="45">45s</button>
+          <button data-timeframe="60">1m</button>
+          <button data-timeframe="120">2m</button>
+          <button data-timeframe="180">3m</button>
+          <button data-timeframe="300">5m</button>
+        </div>
+
+        <section class="market-list" id="marketList"></section>
+      </aside>
+
+      <section class="chart-panel">
+        <header class="chart-top">
+          <div>
+            <p class="eyebrow">Activo</p>
+            <h2 id="selectedAsset">-</h2>
+          </div>
+          <div class="status-pill" id="edgeStatus">MERCADO SIN VENTAJA ESTADÍSTICA</div>
+        </header>
+
+        <div class="chart-wrap">
+          <canvas id="priceChart"></canvas>
+          <div class="empty-chart" id="emptyChart">Esperando velas reales de Quotex</div>
+        </div>
+
+        <section class="metrics-row">
+          <div class="metric">
+            <span>Fuerza</span>
+            <strong id="strengthValue">0.0</strong>
+          </div>
+          <div class="metric">
+            <span>Continuidad</span>
+            <strong id="continuityValue">0.0</strong>
+          </div>
+          <div class="metric">
+            <span>Cansancio</span>
+            <strong id="exhaustionValue">0.0</strong>
+          </div>
+          <div class="metric">
+            <span>Timeframe</span>
+            <strong id="timeframeValue">1m</strong>
+          </div>
+        </section>
+      </section>
+
+      <aside class="signals-panel">
+        <header class="signals-top">
+          <h2>Historial</h2>
+          <span id="signalCount">0</span>
+        </header>
+        <section id="signalsList" class="signals-list"></section>
+      </aside>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>
