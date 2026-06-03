@@ -51,7 +51,7 @@ class TelegramNotifier:
             await self._bot.send_message(
                 chat_id=self.chat_id,
                 text=(
-                    "TEST Quotex Signals\n"
+                    "TEST IQ Option Signals\n"
                     "Telegram configurado correctamente.\n"
                     "Este mensaje no es una senal de mercado."
                 ),

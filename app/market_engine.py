@@ -9,8 +9,8 @@ from fastapi import WebSocket
 
 from app.analysis import NO_EDGE_MESSAGE, PriceActionAnalyzer
 from app.config import Settings
+from app.iq_option_broker import IQOptionBroker
 from app.models import AnalysisSnapshot, EngineState, Signal, utc_now
-from app.quotex_client import QuotexBroker
 from app.telegram_notifier import TelegramNotifier
 
 LOGGER = logging.getLogger(__name__)
@@ -20,16 +20,12 @@ ALLOWED_TIMEFRAMES = {30, 45, 60, 120, 180, 300}
 class MarketEngine:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.broker = QuotexBroker(
-            settings.quotex_email,
-            settings.quotex_password,
-            host=settings.quotex_host,
-            user_agent=settings.quotex_user_agent,
-            proxy_url=settings.quotex_proxy_url,
-            wss_url=settings.quotex_wss_url,
-            root_path=settings.quotex_root_path,
-            session_token=settings.quotex_session_token,
-            session_cookies=settings.quotex_session_cookies,
+        self.broker = IQOptionBroker(
+            settings.iq_option_email,
+            settings.iq_option_password,
+            two_factor_code=settings.iq_option_2fa_code,
+            balance_mode=settings.iq_option_balance_mode,
+            stream_max_candles=settings.candle_count,
         )
         self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
         self.analyzer = PriceActionAnalyzer()
@@ -124,7 +120,7 @@ class MarketEngine:
                 markets = sorted(self.active_markets)
                 if self.broker.connected and markets:
                     await asyncio.gather(*(self._analyze_market(asset) for asset in markets))
-                    self.broker_status = "conectado a Quotex"
+                    self.broker_status = "conectado a IQ Option"
                 await self._broadcast()
             except asyncio.CancelledError:
                 raise
@@ -142,12 +138,12 @@ class MarketEngine:
     async def _ensure_connection(self) -> None:
         if self.broker.connected:
             return
-        if not self.settings.quotex_email or not self.settings.quotex_password:
-            self.broker_status = "credenciales Quotex no configuradas"
-            self.last_error = "Configura QUOTEX_EMAIL y QUOTEX_PASSWORD en .env o en Render."
+        if not self.settings.iq_option_email or not self.settings.iq_option_password:
+            self.broker_status = "credenciales IQ Option no configuradas"
+            self.last_error = "CONFIGURACION_MANUAL_REQUERIDA: configura IQ_OPTION_EMAIL y IQ_OPTION_PASSWORD."
             return
         try:
-            self.broker_status = "conectando a Quotex"
+            self.broker_status = "conectando a IQ Option"
             await self.broker.connect()
             self.last_error = None
         except Exception as exc:

@@ -294,6 +294,6 @@ class PriceActionAnalyzer:
             "continuity": 1.0,
             "exhaustion": 1.0,
             "market_message": NO_EDGE_MESSAGE,
-            "reason": "datos insuficientes desde Quotex",
+            "reason": "datos insuficientes desde IQ Option",
             "pattern": "none",
         }

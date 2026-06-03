@@ -1,1 +1,1 @@
-"""Quotex short-expiration signal monitor."""
+"""IQ Option short-expiration signal monitor."""

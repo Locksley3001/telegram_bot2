@@ -26,8 +26,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Quotex Short-Term Signal Monitor",
-    description="Senales de price action para opciones binarias de corto plazo usando velas de Quotex.",
+    title="IQ Option Short-Term Signal Monitor",
+    description="Senales de price action para opciones binarias de corto plazo usando velas de IQ Option.",
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -59,12 +59,12 @@ async def health() -> dict:
     return {
         "status": "ok",
         "broker": engine.broker_status,
-        "quotex_configured": bool(settings.quotex_email and settings.quotex_password),
+        "broker_provider": "iq_option",
+        "iq_option_configured": bool(settings.iq_option_email and settings.iq_option_password),
+        "iq_option_balance_mode": settings.iq_option_balance_mode,
+        "iq_option_2fa_configured": bool(settings.iq_option_2fa_code),
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
-        "quotex_proxy_configured": bool(settings.quotex_proxy_url),
-        "quotex_session_configured": bool(settings.quotex_session_token),
-        "quotex_host": settings.quotex_host,
-        "version": "quotex-env-diagnostics-2026-06-03",
+        "version": "iq-option-migration-2026-06-03",
     }
 
 

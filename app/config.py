@@ -9,24 +9,14 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    quotex_email: str = Field(default="", alias="QUOTEX_EMAIL")
-    quotex_password: str = Field(default="", alias="QUOTEX_PASSWORD")
-    quotex_host: str = Field(default="qxbroker.com", alias="QUOTEX_HOST")
-    quotex_user_agent: str = Field(
-        default=(
-            "Mozilla/5.0 (X11; Linux x86_64; rv:119.0) "
-            "Gecko/20100101 Firefox/119.0"
-        ),
-        alias="QUOTEX_USER_AGENT",
-    )
-    quotex_proxy_url: str = Field(default="", alias="QUOTEX_PROXY_URL")
-    quotex_wss_url: str = Field(default="", alias="QUOTEX_WSS_URL")
-    quotex_root_path: str = Field(default="/tmp/quotex", alias="QUOTEX_ROOT_PATH")
-    quotex_session_token: str = Field(default="", alias="QUOTEX_SESSION_TOKEN")
-    quotex_session_cookies: str = Field(default="", alias="QUOTEX_SESSION_COOKIES")
+    iq_option_email: str = Field(default="", alias="IQ_OPTION_EMAIL")
+    iq_option_password: str = Field(default="", alias="IQ_OPTION_PASSWORD")
+    # CONFIGURACION_MANUAL_REQUERIDA: solo completar si IQ Option pide 2FA/SMS.
+    iq_option_2fa_code: str = Field(default="", alias="IQ_OPTION_2FA_CODE")
+    iq_option_balance_mode: str = Field(default="PRACTICE", alias="IQ_OPTION_BALANCE_MODE")
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
-    markets: str = Field(default="EURUSD_otc,GBPUSD_otc,USDJPY_otc", alias="MARKETS")
+    markets: str = Field(default="EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC", alias="MARKETS")
     default_timeframe: int = Field(default=60, alias="DEFAULT_TIMEFRAME")
     poll_interval_seconds: float = Field(default=2.0, alias="POLL_INTERVAL_SECONDS")
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
@@ -41,7 +31,7 @@ class Settings(BaseSettings):
             return ",".join(str(market).strip() for market in value if str(market).strip())
         if isinstance(value, str):
             return value
-        return "EURUSD_otc,GBPUSD_otc,USDJPY_otc"
+        return "EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC"
 
     @field_validator("default_timeframe")
     @classmethod
