@@ -64,6 +64,7 @@ La aplicacion necesita servir el panel web, exponer el WebSocket `/ws`, responde
 
 ## 5. Consideraciones para que no colapse en produccion
 
+- Despues de configurar variables y redeplegar, abre `/health`. Debe mostrar `quotex_configured: true` y `telegram_configured: true`.
 - El servidor web arranca aunque `QUOTEX_EMAIL` o `QUOTEX_PASSWORD` no esten configurados; mostrara el estado en pantalla y seguira respondiendo `/health`.
 - El motor de mercado corre como tarea asincrona separada del servidor FastAPI.
 - Si falla la conexion con Quotex, el motor cambia a estado de reconexion y vuelve a intentar sin tumbar el proceso.

@@ -62,18 +62,19 @@ class QuotexBroker:
             await self.connect()
 
         assert self._client is not None
+        asset_name = await self._resolve_asset(asset)
         end_from_time = int(time.time())
         offset = max(timeframe * count, timeframe)
 
         try:
             raw_candles = await self._client.get_candles(
-                asset,
+                asset_name,
                 end_from_time=end_from_time,
                 offset=offset,
                 period=timeframe,
             )
         except TypeError:
-            raw_candles = await self._client.get_candles(asset, end_from_time, offset, timeframe)
+            raw_candles = await self._client.get_candles(asset_name, end_from_time, offset, timeframe)
         except Exception:
             self.connected = False
             raise
@@ -82,6 +83,23 @@ class QuotexBroker:
         normalized = [candle for candle in normalized if candle.open > 0 and candle.high >= candle.low]
         normalized.sort(key=lambda item: item.timestamp)
         return normalized[-count:]
+
+    async def _resolve_asset(self, asset: str) -> str:
+        if self._client is None:
+            return asset
+        get_available_asset = getattr(self._client, "get_available_asset", None)
+        if get_available_asset is None:
+            return asset
+        try:
+            asset_name, asset_data = await get_available_asset(asset, force_open=True)
+            if asset_data and len(asset_data) > 2 and not asset_data[2]:
+                raise QuotexUnavailable(f"El activo {asset} no esta abierto en Quotex.")
+            return asset_name or asset
+        except QuotexUnavailable:
+            raise
+        except Exception:
+            LOGGER.exception("No se pudo verificar disponibilidad de %s", asset)
+            return asset
 
     @staticmethod
     def _get_value(raw: Any, names: Iterable[str], default: Any = None) -> Any:

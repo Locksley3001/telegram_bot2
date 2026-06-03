@@ -52,7 +52,13 @@ async def index() -> FileResponse:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "broker": engine.broker_status}
+    return {
+        "status": "ok",
+        "broker": engine.broker_status,
+        "quotex_configured": bool(settings.quotex_email and settings.quotex_password),
+        "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
+        "version": "quotex-env-diagnostics-2026-06-03",
+    }
 
 
 @app.get("/api/state")
