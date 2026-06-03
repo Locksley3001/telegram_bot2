@@ -25,16 +25,16 @@ class TelegramNotifier:
         if self._bot is None or signal.id in self._sent_ids:
             return
 
-        icon = "🟢" if signal.direction == "CALL" else "🔴"
+        icon = "\U0001F7E2" if signal.direction == "CALL" else "\U0001F534"
         text = (
             f"{icon} {signal.direction}\n"
             f"Activo: {signal.asset}\n"
-            f"Puntuación: {signal.score}/10\n"
+            f"Puntuacion: {signal.score}/10\n"
             f"Fuerza: {signal.strength:.1f}/10\n"
             f"Continuidad: {signal.continuity:.1f}/10\n"
             f"Cansancio: {signal.exhaustion:.1f}/10\n"
-            f"Razón principal: {signal.main_reason}\n"
-            f"Expiración sugerida: {signal.suggested_expiration}s\n"
+            f"Razon principal: {signal.main_reason}\n"
+            f"Expiracion sugerida: {signal.suggested_expiration}s\n"
             f"Hora exacta: {signal.created_at.astimezone().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
@@ -43,3 +43,20 @@ class TelegramNotifier:
             self._sent_ids.add(signal.id)
         except Exception:
             LOGGER.exception("No se pudo enviar la senal por Telegram")
+
+    async def send_test(self) -> bool:
+        if self._bot is None:
+            return False
+        try:
+            await self._bot.send_message(
+                chat_id=self.chat_id,
+                text=(
+                    "TEST Quotex Signals\n"
+                    "Telegram configurado correctamente.\n"
+                    "Este mensaje no es una senal de mercado."
+                ),
+            )
+            return True
+        except Exception:
+            LOGGER.exception("No se pudo enviar el test por Telegram")
+            return False

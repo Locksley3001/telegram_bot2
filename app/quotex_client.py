@@ -49,7 +49,7 @@ class QuotexBroker:
 
         try:
             from pyquotex.stable_api import Quotex
-            self._patch_pyquotex_proxy()
+            self._patch_pyquotex_http_transport()
         except ImportError as exc:
             raise QuotexUnavailable(
                 "Instala pyquotex: pip install git+https://github.com/cleitonleonel/pyquotex.git"
@@ -70,29 +70,65 @@ class QuotexBroker:
             raise QuotexUnavailable(self._explain_connection_error(str(message or "No se pudo conectar con Quotex.")))
         self.connected = True
 
-    def _patch_pyquotex_proxy(self) -> None:
-        if not self.proxy_url:
-            return
+    def _patch_pyquotex_http_transport(self) -> None:
         try:
+            from curl_cffi import requests as curl_requests
             import pyquotex.api as api_module
             import pyquotex.network.login as login_module
             import pyquotex.network.navigator as navigator_module
         except Exception:
-            LOGGER.exception("No se pudo preparar proxy para pyquotex")
+            LOGGER.exception("No se pudo preparar transporte curl_cffi para pyquotex")
             return
 
         original_browser = navigator_module.Browser
         original_login = login_module.Login
 
+        class CurlResponseAdapter:
+            def __init__(adapter_self, response: Any) -> None:
+                adapter_self._response = response
+                adapter_self.status_code = int(getattr(response, "status_code", 0) or 0)
+                adapter_self.headers = getattr(response, "headers", {})
+                adapter_self.cookies = getattr(response, "cookies", {})
+                adapter_self.content = getattr(response, "content", b"")
+                adapter_self.text = getattr(response, "text", "")
+                adapter_self.url = getattr(response, "url", "")
+                adapter_self.reason_phrase = getattr(response, "reason", "") or ""
+                adapter_self.is_success = 200 <= adapter_self.status_code < 300
+
+            def json(adapter_self) -> Any:
+                return adapter_self._response.json()
+
+        class CurlAsyncSession:
+            def __init__(session_self) -> None:
+                session_self._session = curl_requests.AsyncSession(
+                    impersonate="chrome124",
+                    proxy=self.proxy_url or None,
+                )
+                session_self.cookies = session_self._session.cookies
+
+            async def request(session_self, method: str, url: str, **kwargs: Any) -> Any:
+                kwargs.pop("verify", None)
+                follow_redirects = kwargs.pop("follow_redirects", True)
+                kwargs.setdefault("allow_redirects", follow_redirects)
+                response = await session_self._session.request(method, url, **kwargs)
+                return CurlResponseAdapter(response)
+
+            async def aclose(session_self) -> None:
+                await session_self._session.close()
+
         class ProxiedBrowser(original_browser):  # type: ignore[misc, valid-type]
             def __init__(browser_self, *args: Any, **kwargs: Any) -> None:
-                kwargs.setdefault("proxies", self.proxy_url)
+                if self.proxy_url:
+                    kwargs.setdefault("proxies", self.proxy_url)
                 super().__init__(*args, **kwargs)
+                browser_self._client = CurlAsyncSession()
 
         class ProxiedLogin(original_login):  # type: ignore[misc, valid-type]
             def __init__(login_self, *args: Any, **kwargs: Any) -> None:
-                kwargs.setdefault("proxies", self.proxy_url)
+                if self.proxy_url:
+                    kwargs.setdefault("proxies", self.proxy_url)
                 super().__init__(*args, **kwargs)
+                login_self._client = CurlAsyncSession()
 
         api_module.Browser = ProxiedBrowser
         api_module.Login = ProxiedLogin

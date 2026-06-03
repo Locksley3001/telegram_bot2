@@ -70,6 +70,7 @@ La aplicacion necesita servir el panel web, exponer el WebSocket `/ws`, responde
 
 - Despues de configurar variables y redeplegar, abre `/health`. Debe mostrar `quotex_configured: true` y `telegram_configured: true`.
 - Si `/api/state` muestra `HTTP 403: Forbidden`, Quotex/Cloudflare esta bloqueando la IP de Render. Configura `QUOTEX_PROXY_URL` con un proxy permitido o usa un servidor/VPS que pueda acceder a Quotex.
+- El proyecto incluye `curl_cffi` para usar fingerprint TLS de navegador real durante el login HTTP de Quotex. Si aun asi Render recibe 403, el bloqueo es por IP/ASN y se requiere `QUOTEX_PROXY_URL`.
 - El servidor web arranca aunque `QUOTEX_EMAIL` o `QUOTEX_PASSWORD` no esten configurados; mostrara el estado en pantalla y seguira respondiendo `/health`.
 - El motor de mercado corre como tarea asincrona separada del servidor FastAPI.
 - Si falla la conexion con Quotex, el motor cambia a estado de reconexion y vuelve a intentar sin tumbar el proceso.

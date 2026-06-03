@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -45,6 +45,10 @@ class TimeframePayload(BaseModel):
     timeframe: int
 
 
+class TelegramTestResponse(BaseModel):
+    sent: bool
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -66,6 +70,13 @@ async def health() -> dict:
 @app.get("/api/state")
 async def get_state():
     return engine.state()
+
+
+@app.post("/api/telegram/test")
+async def test_telegram(x_test_token: str = Header(default="")) -> TelegramTestResponse:
+    if not settings.telegram_chat_id or x_test_token != settings.telegram_chat_id:
+        raise HTTPException(status_code=403, detail="Token de prueba invalido.")
+    return TelegramTestResponse(sent=await engine.notifier.send_test())
 
 
 @app.post("/api/markets")
