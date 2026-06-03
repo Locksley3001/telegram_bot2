@@ -30,7 +30,8 @@ uvicorn app.main:app --reload
 QUOTEX_EMAIL=tu_correo@gmail.com
 QUOTEX_PASSWORD=tu_contraseña
 TELEGRAM_BOT_TOKEN=tu_token_de_botfather
-TELEGRAM_CHAT_ID=tu_chat_id
+TELEGRAM_CHAT_ID=tu_chat_id 
+hola
 ```
 
 Telegram solo envia senales con puntuacion `>= 6`.
