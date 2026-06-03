@@ -57,6 +57,8 @@ async def health() -> dict:
         "broker": engine.broker_status,
         "quotex_configured": bool(settings.quotex_email and settings.quotex_password),
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
+        "quotex_proxy_configured": bool(settings.quotex_proxy_url),
+        "quotex_host": settings.quotex_host,
         "version": "quotex-env-diagnostics-2026-06-03",
     }
 

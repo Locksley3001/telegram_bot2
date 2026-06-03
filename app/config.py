@@ -11,6 +11,17 @@ load_dotenv()
 class Settings(BaseSettings):
     quotex_email: str = Field(default="", alias="QUOTEX_EMAIL")
     quotex_password: str = Field(default="", alias="QUOTEX_PASSWORD")
+    quotex_host: str = Field(default="qxbroker.com", alias="QUOTEX_HOST")
+    quotex_user_agent: str = Field(
+        default=(
+            "Mozilla/5.0 (X11; Linux x86_64; rv:119.0) "
+            "Gecko/20100101 Firefox/119.0"
+        ),
+        alias="QUOTEX_USER_AGENT",
+    )
+    quotex_proxy_url: str = Field(default="", alias="QUOTEX_PROXY_URL")
+    quotex_wss_url: str = Field(default="", alias="QUOTEX_WSS_URL")
+    quotex_root_path: str = Field(default="/tmp/quotex", alias="QUOTEX_ROOT_PATH")
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
     markets: str = Field(default="EURUSD_otc,GBPUSD_otc,USDJPY_otc", alias="MARKETS")

@@ -6,6 +6,7 @@ const state = {
 
 const els = {
   brokerStatus: document.getElementById("brokerStatus"),
+  brokerError: document.getElementById("brokerError"),
   marketSearch: document.getElementById("marketSearch"),
   marketInput: document.getElementById("marketInput"),
   addMarketForm: document.getElementById("addMarketForm"),
@@ -84,6 +85,11 @@ function renderStatus() {
   els.brokerStatus.textContent = state.data.broker_status || "Sin estado";
   if (state.data.last_error) {
     els.brokerStatus.title = state.data.last_error;
+    els.brokerError.textContent = state.data.last_error;
+    els.brokerError.title = state.data.last_error;
+  } else {
+    els.brokerError.textContent = "";
+    els.brokerError.title = "";
   }
 }
 

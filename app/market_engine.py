@@ -20,7 +20,15 @@ ALLOWED_TIMEFRAMES = {30, 45, 60, 120, 180, 300}
 class MarketEngine:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.broker = QuotexBroker(settings.quotex_email, settings.quotex_password)
+        self.broker = QuotexBroker(
+            settings.quotex_email,
+            settings.quotex_password,
+            host=settings.quotex_host,
+            user_agent=settings.quotex_user_agent,
+            proxy_url=settings.quotex_proxy_url,
+            wss_url=settings.quotex_wss_url,
+            root_path=settings.quotex_root_path,
+        )
         self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
         self.analyzer = PriceActionAnalyzer()
         self.active_markets: Set[str] = set(settings.market_list)

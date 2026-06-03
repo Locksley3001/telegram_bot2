@@ -54,6 +54,10 @@ DEFAULT_TIMEFRAME -> 30, 45, 60, 120, 180 o 300. Por defecto: 60.
 POLL_INTERVAL_SECONDS -> Frecuencia de consulta al broker. Por defecto: 2.0.
 CANDLE_COUNT -> Cantidad de velas analizadas por activo. Por defecto: 80.
 SIGNAL_COOLDOWN_SECONDS -> Enfriamiento por activo/direccion. Por defecto: 45.
+QUOTEX_PROXY_URL -> Proxy HTTPS/SOCKS si Quotex bloquea la IP de Render con HTTP 403. Ejemplo: http://usuario:clave@host:puerto.
+QUOTEX_HOST -> Host del broker. Por defecto: qxbroker.com.
+QUOTEX_USER_AGENT -> User-Agent del cliente Quotex.
+QUOTEX_ROOT_PATH -> Ruta donde pyquotex guarda sesion. Por defecto: /tmp/quotex.
 ```
 
 ## 4. Tipo de servicio en Render
@@ -65,6 +69,7 @@ La aplicacion necesita servir el panel web, exponer el WebSocket `/ws`, responde
 ## 5. Consideraciones para que no colapse en produccion
 
 - Despues de configurar variables y redeplegar, abre `/health`. Debe mostrar `quotex_configured: true` y `telegram_configured: true`.
+- Si `/api/state` muestra `HTTP 403: Forbidden`, Quotex/Cloudflare esta bloqueando la IP de Render. Configura `QUOTEX_PROXY_URL` con un proxy permitido o usa un servidor/VPS que pueda acceder a Quotex.
 - El servidor web arranca aunque `QUOTEX_EMAIL` o `QUOTEX_PASSWORD` no esten configurados; mostrara el estado en pantalla y seguira respondiendo `/health`.
 - El motor de mercado corre como tarea asincrona separada del servidor FastAPI.
 - Si falla la conexion con Quotex, el motor cambia a estado de reconexion y vuelve a intentar sin tumbar el proceso.

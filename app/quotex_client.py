@@ -21,10 +21,25 @@ class QuotexBroker:
     normalized candles observed from Quotex.
     """
 
-    def __init__(self, email: str, password: str, lang: str = "es") -> None:
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        lang: str = "es",
+        host: str = "qxbroker.com",
+        user_agent: str = "Mozilla/5.0 (X11; Linux x86_64; rv:119.0) Gecko/20100101 Firefox/119.0",
+        proxy_url: str = "",
+        wss_url: str = "",
+        root_path: str = "/tmp/quotex",
+    ) -> None:
         self.email = email
         self.password = password
         self.lang = lang
+        self.host = host
+        self.user_agent = user_agent
+        self.proxy_url = proxy_url.strip()
+        self.wss_url = wss_url.strip()
+        self.root_path = root_path
         self._client: Optional[Any] = None
         self.connected = False
 
@@ -34,16 +49,64 @@ class QuotexBroker:
 
         try:
             from pyquotex.stable_api import Quotex
+            self._patch_pyquotex_proxy()
         except ImportError as exc:
             raise QuotexUnavailable(
                 "Instala pyquotex: pip install git+https://github.com/cleitonleonel/pyquotex.git"
             ) from exc
 
-        self._client = Quotex(email=self.email, password=self.password, lang=self.lang)
+        self._client = Quotex(
+            email=self.email,
+            password=self.password,
+            host=self.host,
+            lang=self.lang,
+            user_agent=self.user_agent,
+            root_path=self.root_path,
+            proxies=self.proxy_url or None,
+            wss_url_override=self.wss_url or None,
+        )
         check_connect, message = await self._client.connect()
         if not check_connect:
-            raise QuotexUnavailable(str(message or "No se pudo conectar con Quotex."))
+            raise QuotexUnavailable(self._explain_connection_error(str(message or "No se pudo conectar con Quotex.")))
         self.connected = True
+
+    def _patch_pyquotex_proxy(self) -> None:
+        if not self.proxy_url:
+            return
+        try:
+            import pyquotex.api as api_module
+            import pyquotex.network.login as login_module
+            import pyquotex.network.navigator as navigator_module
+        except Exception:
+            LOGGER.exception("No se pudo preparar proxy para pyquotex")
+            return
+
+        original_browser = navigator_module.Browser
+        original_login = login_module.Login
+
+        class ProxiedBrowser(original_browser):  # type: ignore[misc, valid-type]
+            def __init__(browser_self, *args: Any, **kwargs: Any) -> None:
+                kwargs.setdefault("proxies", self.proxy_url)
+                super().__init__(*args, **kwargs)
+
+        class ProxiedLogin(original_login):  # type: ignore[misc, valid-type]
+            def __init__(login_self, *args: Any, **kwargs: Any) -> None:
+                kwargs.setdefault("proxies", self.proxy_url)
+                super().__init__(*args, **kwargs)
+
+        api_module.Browser = ProxiedBrowser
+        api_module.Login = ProxiedLogin
+        login_module.Browser = ProxiedBrowser
+        login_module.Login = ProxiedLogin
+
+    @staticmethod
+    def _explain_connection_error(message: str) -> str:
+        if "403" in message or "Forbidden" in message:
+            return (
+                "HTTP 403 Forbidden: Quotex/Cloudflare bloqueo la IP del servidor. "
+                "En Render suele requerir QUOTEX_PROXY_URL con un proxy permitido."
+            )
+        return message
 
     async def disconnect(self) -> None:
         if self._client is not None:

@@ -116,6 +116,14 @@ h2 {
   font-size: 12px;
 }
 
+.error-line {
+  max-width: 190px;
+  color: var(--red) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .field,
 .add-row,
 .timeframe-row {
