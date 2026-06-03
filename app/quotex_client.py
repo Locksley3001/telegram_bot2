@@ -105,8 +105,11 @@ class QuotexBroker:
                     proxy=self.proxy_url or None,
                 )
                 session_self.cookies = session_self._session.cookies
+                session_self.is_closed = False
 
             async def request(session_self, method: str, url: str, **kwargs: Any) -> Any:
+                if session_self.is_closed:
+                    raise RuntimeError("CurlAsyncSession is closed")
                 kwargs.pop("verify", None)
                 follow_redirects = kwargs.pop("follow_redirects", True)
                 kwargs.setdefault("allow_redirects", follow_redirects)
@@ -114,7 +117,9 @@ class QuotexBroker:
                 return CurlResponseAdapter(response)
 
             async def aclose(session_self) -> None:
-                await session_self._session.close()
+                if not session_self.is_closed:
+                    await session_self._session.close()
+                    session_self.is_closed = True
 
         class ProxiedBrowser(original_browser):  # type: ignore[misc, valid-type]
             def __init__(browser_self, *args: Any, **kwargs: Any) -> None:
