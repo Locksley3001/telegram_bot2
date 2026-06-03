@@ -62,6 +62,7 @@ async def health() -> dict:
         "quotex_configured": bool(settings.quotex_email and settings.quotex_password),
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
         "quotex_proxy_configured": bool(settings.quotex_proxy_url),
+        "quotex_session_configured": bool(settings.quotex_session_token),
         "quotex_host": settings.quotex_host,
         "version": "quotex-env-diagnostics-2026-06-03",
     }

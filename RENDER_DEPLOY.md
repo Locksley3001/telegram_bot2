@@ -58,6 +58,8 @@ QUOTEX_PROXY_URL -> Proxy HTTPS/SOCKS si Quotex bloquea la IP de Render con HTTP
 QUOTEX_HOST -> Host del broker. Por defecto: qxbroker.com.
 QUOTEX_USER_AGENT -> User-Agent del cliente Quotex.
 QUOTEX_ROOT_PATH -> Ruta donde pyquotex guarda sesion. Por defecto: /tmp/quotex.
+QUOTEX_SESSION_TOKEN -> Token/SSID de sesion Quotex ya autenticada. Opcional, util si Cloudflare bloquea el login HTTP de Render.
+QUOTEX_SESSION_COOKIES -> Cookies de sesion Quotex en formato "nombre=valor; nombre2=valor2". Opcional, recomendado junto al token.
 ```
 
 ## 4. Tipo de servicio en Render
@@ -71,6 +73,7 @@ La aplicacion necesita servir el panel web, exponer el WebSocket `/ws`, responde
 - Despues de configurar variables y redeplegar, abre `/health`. Debe mostrar `quotex_configured: true` y `telegram_configured: true`.
 - Si `/api/state` muestra `HTTP 403: Forbidden`, Quotex/Cloudflare esta bloqueando la IP de Render. Configura `QUOTEX_PROXY_URL` con un proxy permitido o usa un servidor/VPS que pueda acceder a Quotex.
 - El proyecto incluye `curl_cffi` para usar fingerprint TLS de navegador real durante el login HTTP de Quotex. Si aun asi Render recibe 403, el bloqueo es por IP/ASN y se requiere `QUOTEX_PROXY_URL`.
+- Si no tienes proxy, usa `QUOTEX_SESSION_TOKEN` y `QUOTEX_SESSION_COOKIES` de una sesion ya abierta en Quotex para evitar el login HTTP bloqueado por Cloudflare.
 - El servidor web arranca aunque `QUOTEX_EMAIL` o `QUOTEX_PASSWORD` no esten configurados; mostrara el estado en pantalla y seguira respondiendo `/health`.
 - El motor de mercado corre como tarea asincrona separada del servidor FastAPI.
 - Si falla la conexion con Quotex, el motor cambia a estado de reconexion y vuelve a intentar sin tumbar el proceso.

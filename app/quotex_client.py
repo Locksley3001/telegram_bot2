@@ -31,6 +31,8 @@ class QuotexBroker:
         proxy_url: str = "",
         wss_url: str = "",
         root_path: str = "/tmp/quotex",
+        session_token: str = "",
+        session_cookies: str = "",
     ) -> None:
         self.email = email
         self.password = password
@@ -40,6 +42,8 @@ class QuotexBroker:
         self.proxy_url = proxy_url.strip()
         self.wss_url = wss_url.strip()
         self.root_path = root_path
+        self.session_token = session_token.strip()
+        self.session_cookies = session_cookies.strip()
         self._client: Optional[Any] = None
         self.connected = False
 
@@ -65,6 +69,12 @@ class QuotexBroker:
             proxies=self.proxy_url or None,
             wss_url_override=self.wss_url or None,
         )
+        if self.session_token:
+            self._client.set_session(
+                user_agent=self.user_agent,
+                cookies=self.session_cookies or None,
+                ssid=self.session_token,
+            )
         check_connect, message = await self._client.connect()
         if not check_connect:
             raise QuotexUnavailable(self._explain_connection_error(str(message or "No se pudo conectar con Quotex.")))

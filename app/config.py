@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     quotex_proxy_url: str = Field(default="", alias="QUOTEX_PROXY_URL")
     quotex_wss_url: str = Field(default="", alias="QUOTEX_WSS_URL")
     quotex_root_path: str = Field(default="/tmp/quotex", alias="QUOTEX_ROOT_PATH")
+    quotex_session_token: str = Field(default="", alias="QUOTEX_SESSION_TOKEN")
+    quotex_session_cookies: str = Field(default="", alias="QUOTEX_SESSION_COOKIES")
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
     markets: str = Field(default="EURUSD_otc,GBPUSD_otc,USDJPY_otc", alias="MARKETS")

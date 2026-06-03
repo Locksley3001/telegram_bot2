@@ -28,6 +28,8 @@ class MarketEngine:
             proxy_url=settings.quotex_proxy_url,
             wss_url=settings.quotex_wss_url,
             root_path=settings.quotex_root_path,
+            session_token=settings.quotex_session_token,
+            session_cookies=settings.quotex_session_cookies,
         )
         self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
         self.analyzer = PriceActionAnalyzer()
