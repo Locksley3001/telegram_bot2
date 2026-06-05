@@ -286,6 +286,36 @@ input:focus {
   color: var(--green);
 }
 
+.chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px 14px;
+}
+
+.chart-actions button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+  padding: 10px 14px;
+  min-height: 40px;
+}
+
+.chart-actions button:hover {
+  border-color: var(--accent);
+}
+
+.test-feedback {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.test-feedback.error {
+  color: var(--red);
+}
+
 .chart-wrap {
   position: relative;
   min-height: 360px;

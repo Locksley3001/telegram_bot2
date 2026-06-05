@@ -40,9 +40,7 @@ class TelegramNotifier:
         )
 
         try:
-            # python-telegram-bot Bot.send_message may be synchronous depending on the
-            # installed version; run in thread to be safe in async code.
-            await asyncio.to_thread(self._bot.send_message, self.chat_id, text)
+            await self._send_message(chat_id=self.chat_id, text=text)
             self._sent_ids.add(signal.id)
         except Exception:
             LOGGER.exception("No se pudo enviar la senal por Telegram")
@@ -51,12 +49,25 @@ class TelegramNotifier:
         if self._bot is None:
             return False
         try:
-            await asyncio.to_thread(
-                self._bot.send_message,
-                self.chat_id,
-                "TEST IQ Option Signals\nTelegram configurado correctamente.\nEste mensaje no es una senal de mercado.",
+            await self._send_message(
+                chat_id=self.chat_id,
+                text=(
+                    "TEST IQ Option Signals\n"
+                    "Telegram configurado correctamente.\n"
+                    "Este mensaje no es una senal de mercado."
+                ),
             )
             return True
         except Exception:
             LOGGER.exception("No se pudo enviar el test por Telegram")
             return False
+
+    async def _send_message(self, **kwargs) -> None:
+        if self._bot is None:
+            return
+
+        send_method = self._bot.send_message
+        if asyncio.iscoroutinefunction(send_method):
+            await send_method(**kwargs)
+        else:
+            await asyncio.to_thread(send_method, **kwargs)

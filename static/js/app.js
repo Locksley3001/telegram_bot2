@@ -2,6 +2,8 @@ const state = {
   data: null,
   selectedAsset: null,
   socket: null,
+  audioContext: null,
+  audioEnabled: false,
   _knownSignalIds: new Set(),
 };
 
@@ -12,6 +14,9 @@ const els = {
   marketInput: document.getElementById("marketInput"),
   addMarketForm: document.getElementById("addMarketForm"),
   marketList: document.getElementById("marketList"),
+  telegramTestButton: document.getElementById("telegramTestButton"),
+  soundTestButton: document.getElementById("soundTestButton"),
+  testFeedback: document.getElementById("testFeedback"),
   timeframeRow: document.getElementById("timeframeRow"),
   selectedAsset: document.getElementById("selectedAsset"),
   edgeStatus: document.getElementById("edgeStatus"),
@@ -40,7 +45,7 @@ function connectSocket() {
 
   state.socket.addEventListener("message", (event) => {
     state.data = JSON.parse(event.data);
-    detectNewSignalsAndNotify(state.data.signals || []);
+    detectNewSignalsAndNotify(state.data.signals || []).catch(() => {});
     ensureSelectedAsset();
     render();
   });
@@ -61,6 +66,17 @@ async function api(path, options = {}) {
   state.data = await response.json();
   ensureSelectedAsset();
   render();
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  return await response.json();
 }
 
 function ensureSelectedAsset() {
@@ -344,6 +360,8 @@ els.addMarketForm.addEventListener("submit", (event) => {
 });
 
 els.marketSearch.addEventListener("input", renderMarkets);
+els.telegramTestButton.addEventListener("click", testTelegram);
+els.soundTestButton.addEventListener("click", testSound);
 
 els.timeframeRow.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-timeframe]");
@@ -357,47 +375,91 @@ els.timeframeRow.addEventListener("click", (event) => {
 window.addEventListener("resize", () => renderSnapshot());
 connectSocket();
 
-function detectNewSignalsAndNotify(signals) {
+async function detectNewSignalsAndNotify(signals) {
   try {
     const ids = new Set(signals.map((s) => s.id));
-    for (const s of signals) {
-      if (!state._knownSignalIds.has(s.id)) {
-        // new signal
-        playNotification();
-      }
-    }
+    const hasNewSignal = signals.some((s) => !state._knownSignalIds.has(s.id));
     state._knownSignalIds = ids;
+    if (hasNewSignal) {
+      await playNotification();
+    }
   } catch (e) {
     // ignore
   }
 }
 
-function playNotification() {
+async function playNotification(force = false) {
+  if (!force && !state.audioEnabled) {
+    return;
+  }
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = await ensureAudioContext();
+    if (!ctx) return;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = "sine";
-    o.frequency.value = 880; // gentle notification pitch
-    g.gain.value = 0.02; // low volume
+    o.frequency.value = 880;
+    g.gain.value = 0.02;
     o.connect(g);
     g.connect(ctx.destination);
     o.start();
     setTimeout(() => {
       o.stop();
-      try {
-        ctx.close();
-      } catch (e) {}
     }, 140);
   } catch (e) {
-    // fallback: try HTMLAudioElement if available
     try {
       const a = new Audio();
-      a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA="; // tiny silent-ish placeholder
+      a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
       a.volume = 0.1;
       a.play().catch(() => {});
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
   }
+}
+
+async function ensureAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!state.audioContext) {
+    state.audioContext = new AudioCtx();
+  }
+  if (state.audioContext.state === "suspended") {
+    try {
+      await state.audioContext.resume();
+    } catch (e) {
+      // user gesture required
+    }
+  }
+  return state.audioContext;
+}
+
+async function testSound() {
+  try {
+    state.audioEnabled = true;
+    await ensureAudioContext();
+    await playNotification(true);
+    setTestFeedback("Sonido de prueba enviado.", false);
+  } catch (error) {
+    setTestFeedback("No se pudo reproducir sonido. Usa el boton otra vez.", true);
+  }
+}
+
+async function testTelegram() {
+  try {
+    const response = await apiRequest("/api/telegram/test", { method: "POST" });
+    if (response?.sent) {
+      setTestFeedback("Prueba de Telegram enviada.", false);
+    } else {
+      setTestFeedback("No se recibio respuesta de Telegram.", true);
+    }
+  } catch (error) {
+    setTestFeedback(`Error Telegram: ${String(error)}`, true);
+  }
+}
+
+function setTestFeedback(message, isError = false) {
+  if (!els.testFeedback) return;
+  els.testFeedback.textContent = message;
+  els.testFeedback.classList.toggle("error", isError);
 }

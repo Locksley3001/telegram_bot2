@@ -74,9 +74,9 @@ async def get_state():
 
 
 @app.post("/api/telegram/test")
-async def test_telegram(x_test_token: str = Header(default="")) -> TelegramTestResponse:
-    if not settings.telegram_chat_id or x_test_token != settings.telegram_chat_id:
-        raise HTTPException(status_code=403, detail="Token de prueba invalido.")
+async def test_telegram() -> TelegramTestResponse:
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="Telegram no esta configurado.")
     return TelegramTestResponse(sent=await engine.notifier.send_test())
 
 

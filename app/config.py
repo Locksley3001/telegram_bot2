@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     iq_option_balance_mode: str = Field(default="PRACTICE", alias="IQ_OPTION_BALANCE_MODE")
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
-    markets: str = Field(default="EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,NVDA-OTC,AMD-OTC,AAPL-OTC,TSLA-OTC", alias="MARKETS")
+    markets: str = Field(default="EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC", alias="MARKETS")
     default_timeframe: int = Field(default=60, alias="DEFAULT_TIMEFRAME")
     poll_interval_seconds: float = Field(default=2.0, alias="POLL_INTERVAL_SECONDS")
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
