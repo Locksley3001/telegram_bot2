@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional, Set
 
@@ -39,7 +40,9 @@ class TelegramNotifier:
         )
 
         try:
-            await self._bot.send_message(chat_id=self.chat_id, text=text)
+            # python-telegram-bot Bot.send_message may be synchronous depending on the
+            # installed version; run in thread to be safe in async code.
+            await asyncio.to_thread(self._bot.send_message, self.chat_id, text)
             self._sent_ids.add(signal.id)
         except Exception:
             LOGGER.exception("No se pudo enviar la senal por Telegram")
@@ -48,13 +51,10 @@ class TelegramNotifier:
         if self._bot is None:
             return False
         try:
-            await self._bot.send_message(
-                chat_id=self.chat_id,
-                text=(
-                    "TEST IQ Option Signals\n"
-                    "Telegram configurado correctamente.\n"
-                    "Este mensaje no es una senal de mercado."
-                ),
+            await asyncio.to_thread(
+                self._bot.send_message,
+                self.chat_id,
+                "TEST IQ Option Signals\nTelegram configurado correctamente.\nEste mensaje no es una senal de mercado.",
             )
             return True
         except Exception:

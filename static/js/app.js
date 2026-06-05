@@ -2,6 +2,7 @@ const state = {
   data: null,
   selectedAsset: null,
   socket: null,
+  _knownSignalIds: new Set(),
 };
 
 const els = {
@@ -39,6 +40,7 @@ function connectSocket() {
 
   state.socket.addEventListener("message", (event) => {
     state.data = JSON.parse(event.data);
+    detectNewSignalsAndNotify(state.data.signals || []);
     ensureSelectedAsset();
     render();
   });
@@ -242,7 +244,11 @@ function drawChart(candles, zones, signal) {
   const lows = data.map((candle) => Number(candle.low));
   let max = Math.max(...highs);
   let min = Math.min(...lows);
-  const span = Math.max(max - min, max * 0.0001);
+  const rawSpan = max - min;
+  const absMax = Math.abs(max) || 1;
+  const absMin = Math.abs(min) || 1;
+  const minSpan = Math.max(absMax * 0.002, absMin * 0.002, 0.0005);
+  const span = Math.max(rawSpan, minSpan);
   max += span * 0.08;
   min -= span * 0.08;
 
@@ -350,3 +356,48 @@ els.timeframeRow.addEventListener("click", (event) => {
 
 window.addEventListener("resize", () => renderSnapshot());
 connectSocket();
+
+function detectNewSignalsAndNotify(signals) {
+  try {
+    const ids = new Set(signals.map((s) => s.id));
+    for (const s of signals) {
+      if (!state._knownSignalIds.has(s.id)) {
+        // new signal
+        playNotification();
+      }
+    }
+    state._knownSignalIds = ids;
+  } catch (e) {
+    // ignore
+  }
+}
+
+function playNotification() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 880; // gentle notification pitch
+    g.gain.value = 0.02; // low volume
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    setTimeout(() => {
+      o.stop();
+      try {
+        ctx.close();
+      } catch (e) {}
+    }, 140);
+  } catch (e) {
+    // fallback: try HTMLAudioElement if available
+    try {
+      const a = new Audio();
+      a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA="; // tiny silent-ish placeholder
+      a.volume = 0.1;
+      a.play().catch(() => {});
+    } catch (e) {}
+  }
+}
