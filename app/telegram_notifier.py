@@ -94,7 +94,7 @@ class TelegramNotifier:
         return [
             record
             for record in records
-            if record.status != "pending" and record.id not in self._result_sent_ids
+            if record.status in {"win", "loss", "push", "aborted"} and record.id not in self._result_sent_ids
         ]
 
     async def _send_outcome_unlocked(self, record: SignalOutcome) -> None:
@@ -102,7 +102,7 @@ class TelegramNotifier:
             return
         if record.id in self._result_sent_ids:
             return
-        if record.status == "pending":
+        if record.status in {"waiting_entry", "pending"}:
             return
 
         text = self._outcome_text(record)
@@ -176,6 +176,7 @@ class TelegramNotifier:
             f"Puntuacion: {record.score}/10\n"
             f"Entrada: {TelegramNotifier._format_price(record.entry_price)}\n"
             f"Salida: {result_price}\n"
+            f"Motivo aborto: {record.abort_reason or '-'}\n"
             f"Expiracion: {record.suggested_expiration}s\n"
             f"Hora resultado: {resolved_at.astimezone().strftime('%Y-%m-%d %H:%M:%S')}"
         )
@@ -222,6 +223,8 @@ class TelegramNotifier:
             return "PERDIDA"
         if status == "push":
             return "EMPATE"
+        if status == "aborted":
+            return "ABORTADA"
         return "PENDIENTE"
 
     @staticmethod

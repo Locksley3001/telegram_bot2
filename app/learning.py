@@ -55,6 +55,8 @@ class SignalLearningSystem:
         self.updated_at: Optional[datetime] = None
         self.allowed_signals = 0
         self.blocked_signals = 0
+        self.exploration_signals = 0
+        self.block_recommendations = 0
         self.last_decision = ""
         self._signature = ""
         self._load_decision_counters()
@@ -120,6 +122,7 @@ class SignalLearningSystem:
             decision = LearningDecision(False, self._rule_rate(blocking_rule), int(self._rule_total(blocking_rule)), reason)
             exploration = self._exploration_decision(signal, decision)
             if exploration is not None:
+                self.block_recommendations += 1
                 self._remember_decision(exploration)
                 return exploration
             self._remember_decision(decision)
@@ -136,6 +139,7 @@ class SignalLearningSystem:
             decision = LearningDecision(False, estimate["rate"], estimate["samples"], reason)
             exploration = self._exploration_decision(signal, decision)
             if exploration is not None:
+                self.block_recommendations += 1
                 self._remember_decision(exploration)
                 return exploration
             self._remember_decision(decision)
@@ -171,6 +175,8 @@ class SignalLearningSystem:
             rules=len(self.rules),
             allowed_signals=self.allowed_signals,
             blocked_signals=self.blocked_signals,
+            exploration_signals=self.exploration_signals,
+            block_recommendations=self.block_recommendations,
             last_decision=self.last_decision,
             risky_patterns=risky,
             updated_at=self.updated_at,
@@ -356,9 +362,13 @@ class SignalLearningSystem:
     def _remember_decision(self, decision: LearningDecision) -> None:
         if decision.allowed:
             self.allowed_signals += 1
+            if decision.reason.startswith("Aprendizaje permite exploracion controlada"):
+                self.exploration_signals += 1
         else:
             self.blocked_signals += 1
+            self.block_recommendations += 1
         self.last_decision = decision.reason
+        self._save()
 
     def _exploration_decision(self, signal: Signal, blocked: LearningDecision) -> Optional[LearningDecision]:
         if self.exploration_interval <= 0:
@@ -391,6 +401,8 @@ class SignalLearningSystem:
             "exploration_interval": self.exploration_interval,
             "allowed_signals": self.allowed_signals,
             "blocked_signals": self.blocked_signals,
+            "exploration_signals": self.exploration_signals,
+            "block_recommendations": self.block_recommendations,
             "last_decision": self.last_decision,
             "signature": self._signature,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -412,6 +424,10 @@ class SignalLearningSystem:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             self.allowed_signals = int(payload.get("allowed_signals", 0))
             self.blocked_signals = int(payload.get("blocked_signals", 0))
+            self.exploration_signals = int(payload.get("exploration_signals", 0))
+            self.block_recommendations = int(
+                payload.get("block_recommendations", self.blocked_signals + self.exploration_signals)
+            )
             self.last_decision = str(payload.get("last_decision", ""))
             self._signature = str(payload.get("signature", ""))
             updated_at = payload.get("updated_at")
@@ -420,6 +436,8 @@ class SignalLearningSystem:
         except Exception:
             self.allowed_signals = 0
             self.blocked_signals = 0
+            self.exploration_signals = 0
+            self.block_recommendations = 0
             self.last_decision = ""
             self._signature = ""
 

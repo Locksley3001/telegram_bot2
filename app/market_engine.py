@@ -65,7 +65,9 @@ class MarketEngine:
             self.signals = self._signals_from_performance()
         self.notifier.remember_signals(signal.id for signal in self.signals)
         self.notifier.remember_outcomes(
-            record.id for record in self.performance.records.values() if record.status != "pending"
+            record.id
+            for record in self.performance.records.values()
+            if record.status in {"win", "loss", "push", "aborted"}
         )
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
@@ -151,6 +153,7 @@ class MarketEngine:
             signal_history_total=self._signal_history_total(),
             performance=self.performance.summary(),
             learning=self.learning.summary(),
+            virtual_balance=self.performance.virtual_balance(timeframe=self.timeframe),
             last_error=self.last_error,
         )
 
@@ -196,13 +199,15 @@ class MarketEngine:
             candles = await self.broker.get_realtime_candles(asset, self.timeframe)
             if len(candles) < 4:
                 candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
-            resolved_records = self.performance.evaluate(asset, candles)
+            resolved_records = self.performance.evaluate(asset, candles, self.analyzer.abort_pending_reason)
             if resolved_records:
                 self.learning.rebuild(self.performance.records.values())
             pending_outcomes = self.notifier.pending_outcomes(self.performance.records.values())
             if pending_outcomes:
                 await self.notifier.send_outcomes(pending_outcomes)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
+            if signal is not None:
+                signal, context = self._apply_balance_rules(signal, context)
             if signal is not None:
                 decision = self.learning.decide(signal)
                 if decision.allowed:
@@ -222,6 +227,11 @@ class MarketEngine:
                 continuity=context.get("continuity", 1.0),
                 exhaustion=context.get("exhaustion", 1.0),
                 cci=context.get("cci", 0.0),
+                factor_score=context.get("factor_score", 0),
+                confidence=context.get("confidence", "discarded"),
+                stake_amount=context.get("stake_amount", 0),
+                pending_execution_at=context.get("pending_execution_at") or (signal.pending_execution_at if signal else None),
+                analysis_text=context.get("analysis_text", ""),
                 updated_at=utc_now(),
             )
 
@@ -245,7 +255,7 @@ class MarketEngine:
             LOGGER.exception("Fallo analizando %s", asset)
 
     def _can_emit(self, signal: Signal) -> bool:
-        if signal.score < 7:
+        if signal.stake_amount < 10000:
             return False
         if signal.id in self._emitted_signal_ids:
             return False
@@ -254,6 +264,77 @@ class MarketEngine:
             return True
         elapsed = (signal.created_at - previous).total_seconds()
         return elapsed >= self.settings.signal_cooldown_seconds
+
+    def _apply_balance_rules(self, signal: Signal, context: dict) -> tuple[Optional[Signal], dict]:
+        wallet = self.performance.virtual_balance(timeframe=self.timeframe)
+        reason_suffixes: List[str] = []
+
+        if wallet.balance < 10000:
+            return self._block_signal(
+                context,
+                "SENAL DESCARTADA - saldo inferior a $10.000; modo proteccion activo",
+            )
+        if wallet.pause_candles_remaining > 0:
+            return self._block_signal(
+                context,
+                f"PAUSA - esperando {wallet.pause_candles_remaining} vela(s) por racha perdedora",
+            )
+        if wallet.bankruptcies >= 2 and context.get("trend_label") == "lateral":
+            return self._block_signal(
+                context,
+                "SENAL DESCARTADA - Quiebra #2 activa: no se opera mercado lateral",
+            )
+
+        factor_score = int(context.get("factor_score", signal.factor_score))
+        if factor_score >= wallet.high_confidence_threshold:
+            stake = 20000
+            confidence = "high"
+        elif factor_score >= 2:
+            stake = 10000
+            confidence = "low"
+        else:
+            return self._block_signal(context, "SENAL DESCARTADA - puntuacion insuficiente")
+
+        if wallet.balance < 20000 and stake > 10000:
+            stake = 10000
+            confidence = "low"
+            reason_suffixes.append("saldo bajo: apuesta limitada a $10.000")
+        if wallet.bankruptcies >= 4 and wallet.operations_since_reset < 10 and stake > 10000:
+            stake = 10000
+            confidence = "low"
+            reason_suffixes.append("Quiebra #4+: maximo $10.000 en las primeras 10 operaciones")
+        if stake > wallet.balance:
+            stake = 10000 if wallet.balance >= 10000 else 0
+            confidence = "low"
+            reason_suffixes.append("saldo disponible limita la apuesta")
+        if stake < 10000:
+            return self._block_signal(context, "SENAL DESCARTADA - saldo insuficiente para $10.000")
+
+        signal.stake_amount = stake
+        signal.confidence = confidence
+        context["stake_amount"] = stake
+        context["confidence"] = confidence
+        context["pending_execution_at"] = signal.pending_execution_at
+        decision = f"OPERACION {signal.direction} - ${stake:,.0f} - al abrir siguiente vela".replace(",", ".")
+        if reason_suffixes:
+            decision = f"{decision} ({'; '.join(reason_suffixes)})"
+            signal.main_reason = f"{signal.main_reason} | {'; '.join(reason_suffixes)}"
+            if signal.analysis_text:
+                signal.analysis_text = f"{signal.analysis_text}\n[MODO: {wallet.mode}]"
+                context["analysis_text"] = signal.analysis_text
+        context["market_message"] = decision
+        return signal, context
+
+    @staticmethod
+    def _block_signal(context: dict, reason: str) -> tuple[None, dict]:
+        context["market_message"] = reason
+        context["reason"] = reason
+        context["stake_amount"] = 0
+        context["confidence"] = "discarded"
+        analysis_text = context.get("analysis_text", "")
+        if analysis_text:
+            context["analysis_text"] = f"{analysis_text}\n-> {reason}"
+        return None, context
 
     @staticmethod
     def _cooldown_key(signal: Signal) -> str:
@@ -364,6 +445,8 @@ class MarketEngine:
             created_at=record.created_at,
             price=record.entry_price,
             timeframe=record.timeframe,
+            stake_amount=record.stake_amount,
+            pending_execution_at=record.entry_at,
         )
 
     def _save_signal_history(self, signals: Optional[List[Signal]] = None) -> None:

@@ -92,6 +92,18 @@
               <span>Score medio</span>
               <strong id="perfAvgScore">0.0</strong>
             </article>
+            <article class="stat-tile win">
+              <span>Saldo virtual</span>
+              <strong id="dashboardBalance">$50.000</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Quiebras</span>
+              <strong id="dashboardBankruptcies">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Metas</span>
+              <strong id="dashboardTargets">0</strong>
+            </article>
             <article class="stat-tile">
               <span>Aprendidos</span>
               <strong id="learningExamples">0</strong>
@@ -103,6 +115,18 @@
             <article class="stat-tile loss">
               <span>Bloqueadas</span>
               <strong id="learningBlocked">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Bloqueables</span>
+              <strong id="learningBlockRecommendations">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Exploracion</span>
+              <strong id="learningExploration">0</strong>
+            </article>
+            <article class="stat-tile win">
+              <span>Permitidas</span>
+              <strong id="learningAllowed">0</strong>
             </article>
           </div>
 
@@ -136,6 +160,24 @@
             </header>
             <div id="resultList" class="result-list"></div>
           </section>
+        </section>
+
+        <section class="live-learning" aria-label="Aprendizaje y saldo en vivo">
+          <div class="live-analysis">
+            <header>
+              <h3>Analisis visible</h3>
+              <span id="liveConfidence">Descartada</span>
+            </header>
+            <pre id="liveAnalysis">Esperando vela cerrada para analizar.</pre>
+          </div>
+          <div class="balance-live">
+            <header>
+              <h3>Saldo virtual</h3>
+              <strong id="virtualBalance">$50.000</strong>
+            </header>
+            <p id="balanceMode">Proteccion normal</p>
+            <div id="balanceHistory" class="balance-history"></div>
+          </div>
         </section>
 
         <section class="metrics-row">

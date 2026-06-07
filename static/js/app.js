@@ -40,14 +40,25 @@ const els = {
   perfLosses: document.getElementById("perfLosses"),
   perfPending: document.getElementById("perfPending"),
   perfAvgScore: document.getElementById("perfAvgScore"),
+  dashboardBalance: document.getElementById("dashboardBalance"),
+  dashboardBankruptcies: document.getElementById("dashboardBankruptcies"),
+  dashboardTargets: document.getElementById("dashboardTargets"),
   learningExamples: document.getElementById("learningExamples"),
   learningMinRate: document.getElementById("learningMinRate"),
   learningBlocked: document.getElementById("learningBlocked"),
+  learningBlockRecommendations: document.getElementById("learningBlockRecommendations"),
+  learningExploration: document.getElementById("learningExploration"),
+  learningAllowed: document.getElementById("learningAllowed"),
   learningStatus: document.getElementById("learningStatus"),
   learningPatterns: document.getElementById("learningPatterns"),
   marketStats: document.getElementById("marketStats"),
   directionStats: document.getElementById("directionStats"),
   resultList: document.getElementById("resultList"),
+  liveConfidence: document.getElementById("liveConfidence"),
+  liveAnalysis: document.getElementById("liveAnalysis"),
+  virtualBalance: document.getElementById("virtualBalance"),
+  balanceMode: document.getElementById("balanceMode"),
+  balanceHistory: document.getElementById("balanceHistory"),
 };
 
 const timeframeLabels = new Map([
@@ -141,6 +152,7 @@ function render() {
   safeRender(renderSnapshot);
   safeRender(renderSignals);
   safeRender(renderDashboard);
+  safeRender(renderVirtualBalance);
 }
 
 function safeRender(fn) {
@@ -237,6 +249,8 @@ function renderSnapshot() {
     els.continuityValue.textContent = "0.0";
     els.exhaustionValue.textContent = "0.0";
     els.cciValue.textContent = "0.0";
+    els.liveConfidence.textContent = "Descartada";
+    els.liveAnalysis.textContent = "Esperando vela cerrada para analizar.";
     if (state.currentView === "chart") {
       drawChart([], [], null);
     }
@@ -252,6 +266,8 @@ function renderSnapshot() {
   els.continuityValue.textContent = Number(snapshot.continuity || 0).toFixed(1);
   els.exhaustionValue.textContent = Number(snapshot.exhaustion || 0).toFixed(1);
   els.cciValue.textContent = Number(snapshot.cci || 0).toFixed(1);
+  els.liveConfidence.textContent = confidenceLabel(snapshot.confidence, snapshot.stake_amount);
+  els.liveAnalysis.textContent = snapshot.analysis_text || snapshot.market_message || "Esperando vela cerrada para analizar.";
   if (state.currentView === "chart") {
     drawChart(snapshot.candles || [], snapshot.zones || [], snapshot.signal || null);
   }
@@ -284,6 +300,8 @@ function renderSignals() {
       </div>
       <div class="signal-body">
         <span><strong>Expiración:</strong> ${signal.suggested_expiration}s</span>
+        <span><strong>Apuesta:</strong> ${formatMoney(signal.stake_amount || 0)} · <strong>Entrada:</strong> ${signal.pending_execution_at ? new Date(signal.pending_execution_at).toLocaleTimeString() : "siguiente vela"}</span>
+        <span><strong>Confianza:</strong> ${confidenceLabel(signal.confidence, signal.stake_amount)} · <strong>Puntuación:</strong> ${signal.factor_score || 0}/6</span>
         <span><strong>Fuerza:</strong> ${Number(signal.strength).toFixed(1)} · <strong>Continuidad:</strong> ${Number(signal.continuity).toFixed(1)}</span>
         <span><strong>Cansancio:</strong> ${Number(signal.exhaustion).toFixed(1)}</span>
         <span><strong>CCI(20):</strong> ${Number(signal.cci || 0).toFixed(1)}</span>
@@ -310,6 +328,10 @@ function renderDashboard() {
   els.perfLosses.textContent = String(perf.losses || 0);
   els.perfPending.textContent = String(perf.pending || 0);
   els.perfAvgScore.textContent = Number(perf.avg_score || 0).toFixed(1);
+  const balance = state.data.virtual_balance || {};
+  if (els.dashboardBalance) els.dashboardBalance.textContent = formatMoney(balance.balance || 0);
+  if (els.dashboardBankruptcies) els.dashboardBankruptcies.textContent = String(balance.bankruptcies || 0);
+  if (els.dashboardTargets) els.dashboardTargets.textContent = String(balance.targets_hit || 0);
   renderLearning(state.data.learning || {});
   renderBuckets(els.marketStats, perf.by_market || [], "Sin operaciones evaluadas por mercado");
   renderBuckets(els.directionStats, perf.by_direction || [], "Sin operaciones evaluadas por dirección");
@@ -321,6 +343,9 @@ function renderLearning(learning) {
   els.learningExamples.textContent = String(learning.resolved_examples || 0);
   els.learningMinRate.textContent = `${Number(learning.min_win_rate || 0).toFixed(1)}%`;
   els.learningBlocked.textContent = String(learning.blocked_signals || 0);
+  els.learningBlockRecommendations.textContent = String(learning.block_recommendations || learning.blocked_signals || 0);
+  els.learningExploration.textContent = String(learning.exploration_signals || 0);
+  els.learningAllowed.textContent = String(learning.allowed_signals || 0);
   els.learningStatus.textContent = learning.enabled ? "Activo" : "Pausado";
   renderLearningPatterns(learning);
 }
@@ -356,6 +381,49 @@ function renderLearningPatterns(learning) {
     `;
     els.learningPatterns.appendChild(row);
   });
+}
+
+function renderVirtualBalance() {
+  const balance = state.data?.virtual_balance || {};
+  els.virtualBalance.textContent = formatMoney(balance.balance || 0);
+  els.balanceMode.textContent = balance.mode || "Proteccion normal";
+  els.balanceHistory.innerHTML = "";
+  const history = balance.history || [];
+  if (!history.length) {
+    const empty = document.createElement("p");
+    empty.className = "market-meta";
+    empty.textContent = "Sin eventos de saldo todavia.";
+    els.balanceHistory.appendChild(empty);
+    return;
+  }
+
+  history.slice(-12).reverse().forEach((event) => {
+    const row = document.createElement("article");
+    row.className = `balance-event ${balanceEventClass(event.mark)}`;
+    const time = new Date(event.timestamp).toLocaleTimeString();
+    row.innerHTML = `
+      <strong><span>${event.mark}</span><span>${formatMoney(event.balance || 0)}</span></strong>
+      <span>${time} · ${event.asset || "-"} ${event.direction && event.direction !== "NONE" ? event.direction : ""}</span>
+      <span>Apuesta ${formatMoney(event.stake_amount || 0)} · Resultado ${event.result || "-"} · P/L ${formatSignedMoney(event.profit || 0)}</span>
+    `;
+    els.balanceHistory.appendChild(row);
+  });
+}
+
+function confidenceLabel(confidence, stake) {
+  if (confidence === "high") return `Alta ${formatMoney(stake || 20000)}`;
+  if (confidence === "low") return `Baja ${formatMoney(stake || 10000)}`;
+  return "Descartada";
+}
+
+function balanceEventClass(mark = "") {
+  const value = String(mark).toLowerCase();
+  if (value.includes("ganancia")) return "ganancia";
+  if (value.includes("perdida")) return "perdida";
+  if (value.includes("quiebra")) return "quiebra";
+  if (value.includes("meta")) return "meta";
+  if (value.includes("pausa")) return "pausa";
+  return "";
 }
 
 function renderBuckets(container, buckets, emptyText) {
@@ -413,6 +481,10 @@ function renderResults(results) {
       <div class="result-meta">
         Entrada ${formatPrice(entry)} · Salida ${exit == null ? "-" : formatPrice(exit)}
       </div>
+      <div class="result-meta">
+        Apuesta ${formatMoney(result.stake_amount || 0)} · Saldo ${result.balance_after == null ? "-" : formatMoney(result.balance_after)}
+      </div>
+      ${result.abort_reason ? `<div class="result-meta">Abortada: ${result.abort_reason}</div>` : ""}
     `;
     els.resultList.appendChild(row);
   });
@@ -422,7 +494,20 @@ function statusLabel(status) {
   if (status === "win") return "GANADA";
   if (status === "loss") return "PERDIDA";
   if (status === "push") return "EMPATE";
+  if (status === "aborted") return "ABORTADA";
+  if (status === "waiting_entry") return "ESPERANDO APERTURA";
   return "PENDIENTE";
+}
+
+function formatMoney(value) {
+  const amount = Number(value || 0);
+  return `$${Math.round(amount).toLocaleString("es-CO")}`;
+}
+
+function formatSignedMoney(value) {
+  const amount = Number(value || 0);
+  const prefix = amount > 0 ? "+" : amount < 0 ? "-" : "";
+  return `${prefix}${formatMoney(Math.abs(amount))}`;
 }
 
 function formatPrice(value) {
