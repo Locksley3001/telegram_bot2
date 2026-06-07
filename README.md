@@ -48,12 +48,14 @@ IQ_OPTION_BALANCE_MODE=PRACTICE
 IQ_OPTION_2FA_CODE=
 MARKETS=EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC
 DEFAULT_TIMEFRAME=60
-POLL_INTERVAL_SECONDS=2.0
+POLL_INTERVAL_SECONDS=0.75
 CANDLE_COUNT=80
 SIGNAL_COOLDOWN_SECONDS=45
 ```
 
 Telegram solo envia senales con puntuacion `>= 7`.
+
+El monitor usa stream de velas en tiempo real cuando IQ Option lo permite, y la logica CCI puede alertar sobre la vela en formacion cuando ya hay rechazo/cansancio suficiente.
 
 El dashboard de rendimiento guarda las senales emitidas en `data/performance.json` y las evalua
 despues de la expiracion sugerida para medir ganadas, perdidas, empates, pendientes y acierto por mercado.

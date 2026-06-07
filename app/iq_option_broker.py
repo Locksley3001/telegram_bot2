@@ -195,8 +195,9 @@ class IQOptionBroker(BrokerInterface):
         async with self._request_lock:
             raw = await asyncio.to_thread(client.get_realtime_candles, asset_name, timeframe)
         candles = [self._normalize_candle(candle, timeframe) for candle in (raw or {}).values()]
+        candles = [candle for candle in candles if candle.open > 0 and candle.high >= candle.low]
         candles.sort(key=lambda item: item.timestamp)
-        return candles
+        return candles[-self.stream_max_candles :]
 
     async def stop_realtime_candles(self, asset: str, timeframe: int) -> None:
         client = self._client

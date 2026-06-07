@@ -43,6 +43,7 @@ class MarketEngine:
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
+        self._emitted_signal_ids: Set[str] = set()
         self._task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._clients: Set[WebSocket] = set()
@@ -161,7 +162,9 @@ class MarketEngine:
 
     async def _analyze_market(self, asset: str) -> None:
         try:
-            candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
+            candles = await self.broker.get_realtime_candles(asset, self.timeframe)
+            if len(candles) < 4:
+                candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
             self.performance.evaluate(asset, candles)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
             snapshot = AnalysisSnapshot(
@@ -185,7 +188,10 @@ class MarketEngine:
                     self.signals.append(signal)
                     self.performance.register_signal(signal)
                     self._last_signal_at[self._cooldown_key(signal)] = signal.created_at
+                    self._emitted_signal_ids.add(signal.id)
                     self.signals = self.signals[-200:]
+                    if len(self._emitted_signal_ids) > 1000:
+                        self._emitted_signal_ids = set(list(self._emitted_signal_ids)[-500:])
                     emit_signal = signal
             if emit_signal is not None:
                 await self.notifier.send_signal(emit_signal)
@@ -195,6 +201,8 @@ class MarketEngine:
 
     def _can_emit(self, signal: Signal) -> bool:
         if signal.score < 7:
+            return False
+        if signal.id in self._emitted_signal_ids:
             return False
         previous = self._last_signal_at.get(self._cooldown_key(signal))
         if previous is None:

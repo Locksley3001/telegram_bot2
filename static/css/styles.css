@@ -201,6 +201,15 @@ input:focus {
 .signals-list {
   padding: 14px;
   overflow: auto;
+  min-height: 0;
+}
+
+.market-list {
+  flex: 1 1 auto;
+}
+
+.signals-list {
+  flex: 1 1 auto;
 }
 
 .market-item {
@@ -423,6 +432,8 @@ input:focus {
 }
 
 .dashboard-section {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
@@ -446,6 +457,12 @@ input:focus {
   display: grid;
   gap: 8px;
   padding: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.stats-list {
+  flex: 1 1 auto;
 }
 
 .stats-row,

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
         alias="MARKETS",
     )
     default_timeframe: int = Field(default=60, alias="DEFAULT_TIMEFRAME")
-    poll_interval_seconds: float = Field(default=2.0, alias="POLL_INTERVAL_SECONDS")
+    poll_interval_seconds: float = Field(default=0.75, alias="POLL_INTERVAL_SECONDS")
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
     signal_cooldown_seconds: int = Field(default=45, alias="SIGNAL_COOLDOWN_SECONDS")
 

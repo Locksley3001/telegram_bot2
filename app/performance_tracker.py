@@ -17,9 +17,10 @@ class PerformanceTracker:
     def register_signal(self, signal: Signal) -> None:
         if signal.id in self.records:
             return
+        asset = self._normalize_asset(signal.asset)
         self.records[signal.id] = SignalOutcome(
             id=signal.id,
-            asset=signal.asset,
+            asset=asset,
             direction=signal.direction,
             score=signal.score,
             strength=signal.strength,
@@ -36,6 +37,7 @@ class PerformanceTracker:
         self._save()
 
     def evaluate(self, asset: str, candles: List[Candle]) -> None:
+        asset = self._normalize_asset(asset)
         pending = [
             record
             for record in self.records.values()
@@ -95,10 +97,11 @@ class PerformanceTracker:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             records = payload.get("records", [])
             self.records = {
-                record["id"]: SignalOutcome.model_validate(record)
+                record["id"]: self._normalize_record(SignalOutcome.model_validate(record))
                 for record in records
                 if isinstance(record, dict) and record.get("id")
             }
+            self._save()
         except Exception:
             self.records = {}
 
@@ -150,3 +153,21 @@ class PerformanceTracker:
     def _win_rate(wins: int, losses: int) -> float:
         total = wins + losses
         return round((wins / total) * 100.0, 1) if total else 0.0
+
+    @classmethod
+    def _normalize_record(cls, record: SignalOutcome) -> SignalOutcome:
+        record.asset = cls._normalize_asset(record.asset)
+        return record
+
+    @staticmethod
+    def _normalize_asset(asset: str) -> str:
+        cleaned = asset.strip().upper().replace(" ", "").replace("_", "-")
+        aliases = {
+            "BTC/USD-OTC": "BTCUSD-OTC",
+            "BTCUSD-OTC-OP": "BTCUSD-OTC",
+            "NVIDIAAMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA/AMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA-AMD-OTC": "NVDA/AMD-OTC",
+            "NVDAAMD-OTC": "NVDA/AMD-OTC",
+        }
+        return aliases.get(cleaned, cleaned)

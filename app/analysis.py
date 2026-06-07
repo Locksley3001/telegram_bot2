@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 from app.models import Candle, CandleMetrics, Signal, Zone, utc_now
@@ -8,21 +9,21 @@ NO_EDGE_MESSAGE = "MERCADO SIN VENTAJA ESTADISTICA"
 CCI_PERIOD = 20
 CCI_OVERBOUGHT = 100.0
 CCI_OVERSOLD = -100.0
+MIN_FORMING_PROGRESS = 0.28
 
 
 class PriceActionAnalyzer:
     def analyze(self, asset: str, timeframe: int, candles: List[Candle]) -> Tuple[List[Zone], Optional[Signal], dict]:
         usable = [candle for candle in candles if candle.high >= candle.low and candle.open > 0]
         zones = self.detect_zones(usable)
-        closed = [candle for candle in usable if candle.is_closed]
-        signal_candles = closed if len(closed) >= CCI_PERIOD else usable
+        signal_candles = usable
 
         if len(signal_candles) < CCI_PERIOD:
             return zones, None, self._empty_context()
 
         metrics = [self._metrics(candle) for candle in signal_candles]
         latest = signal_candles[-1]
-        chosen_side, chosen = self._cci_reaction_context(signal_candles, metrics, zones)
+        chosen_side, chosen = self._cci_reaction_context(signal_candles, metrics, zones, timeframe)
 
         if chosen_side == 0 or chosen["score"] < 7:
             return zones, None, chosen
@@ -31,7 +32,7 @@ class PriceActionAnalyzer:
         grade = "strong" if chosen["score"] >= 8 else "valid"
         created_at = utc_now()
         signal = Signal(
-            id=f"{asset}:{timeframe}:{direction}:cci20:{int(latest.timestamp)}",
+            id=f"{asset}:{timeframe}:{direction}:cci20-live:{int(latest.timestamp)}",
             asset=asset,
             direction=direction,
             score=max(1, min(10, round(chosen["score"]))),
@@ -93,12 +94,19 @@ class PriceActionAnalyzer:
     def _zone_exists(zones: List[Zone], price: float, kind: str, tolerance: float) -> bool:
         return any(zone.kind == kind and abs(zone.price - price) <= tolerance for zone in zones)
 
-    def _cci_reaction_context(self, candles: List[Candle], metrics: List[CandleMetrics], zones: List[Zone]) -> Tuple[int, dict]:
+    def _cci_reaction_context(
+        self,
+        candles: List[Candle],
+        metrics: List[CandleMetrics],
+        zones: List[Zone],
+        timeframe: int,
+    ) -> Tuple[int, dict]:
         cci_values = self._cci_series(candles, CCI_PERIOD)
         latest_cci = cci_values[-1] if cci_values else 0.0
         recent_cci = cci_values[-8:] if len(cci_values) >= 8 else cci_values
         latest = candles[-1]
         latest_metric = metrics[-1]
+        candle_progress = self._candle_progress(latest, timeframe)
         recent_candles = candles[-8:]
         recent_metrics = metrics[-8:]
 
@@ -135,6 +143,7 @@ class PriceActionAnalyzer:
 
         tired_candle = self._is_exhaustion_rejection(trend_side, latest_metric)
         has_prior_move = continuity >= 4.5 or strength >= 4.8
+        enough_forming_data = latest.is_closed or candle_progress >= MIN_FORMING_PROGRESS
         raw_score = (
             cci_pressure * 0.32
             + exhaustion * 0.22
@@ -151,15 +160,20 @@ class PriceActionAnalyzer:
             raw_score += 0.4
         else:
             raw_score -= 1.4
+        if not enough_forming_data:
+            raw_score -= 2.8
 
         score = max(1.0, min(10.0, raw_score))
         direction_text = "PUT" if signal_side == -1 else "CALL"
         extreme_text = "sobrecompra" if high_extreme else "sobreventa"
-        if tired_candle and has_prior_move:
+        signal_timing = "cerrada" if latest.is_closed else f"en formacion {candle_progress * 100:.0f}%"
+        if tired_candle and has_prior_move and enough_forming_data:
             reason = (
                 f"CCI(20) en {extreme_text} extrema ({latest_cci:.1f}) con vela de cansancio "
-                f"y rechazo; entrada contra mercado {direction_text}"
+                f"y rechazo ({signal_timing}); entrada contra mercado {direction_text}"
             )
+        elif not enough_forming_data:
+            reason = f"CCI(20) extremo ({latest_cci:.1f}), esperando mas desarrollo de la vela actual"
         else:
             reason = f"CCI(20) extremo ({latest_cci:.1f}), esperando vela de cansancio mas clara"
 
@@ -172,7 +186,7 @@ class PriceActionAnalyzer:
             "confirmation": round(rejection, 1),
             "zone_context": round(zone_context, 1),
             "forming": round(rejection, 1),
-            "pattern": "cci_reversal",
+            "pattern": "cci_reversal" if latest.is_closed else "cci_reversal_live",
             "reason": reason,
             "market_message": NO_EDGE_MESSAGE if score < 7 else "REACCION CCI(20) DETECTADA",
         }
@@ -190,6 +204,14 @@ class PriceActionAnalyzer:
             else:
                 values.append((typical_prices[index] - sma) / (0.015 * mean_deviation))
         return values
+
+    @staticmethod
+    def _candle_progress(candle: Candle, timeframe: int) -> float:
+        if candle.is_closed:
+            return 1.0
+        now = datetime.now(timezone.utc).timestamp()
+        elapsed = max(0.0, now - candle.timestamp)
+        return max(0.0, min(1.0, elapsed / max(float(timeframe), 1.0)))
 
     @staticmethod
     def _metrics(candle: Candle) -> CandleMetrics:
@@ -302,7 +324,7 @@ class PriceActionAnalyzer:
     @staticmethod
     def _suggest_expiration(timeframe: int, score: float, pattern: str) -> int:
         allowed = [30, 45, 60, 120, 180, 300]
-        if pattern == "cci_reversal":
+        if pattern in {"cci_reversal", "cci_reversal_live"}:
             target = 120 if timeframe <= 60 else min(300, timeframe)
         elif score >= 8:
             target = timeframe if timeframe in allowed else 60

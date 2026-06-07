@@ -54,6 +54,8 @@ const timeframeLabels = new Map([
   [300, "5m"],
 ]);
 
+window.appState = state;
+
 function connectSocket() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   state.socket = new WebSocket(`${protocol}://${window.location.host}/ws`);
@@ -92,6 +94,17 @@ async function apiRequest(path, options = {}) {
     throw new Error(await responseErrorText(response));
   }
   return await response.json();
+}
+
+async function refreshState() {
+  try {
+    const data = await apiRequest("/api/state");
+    state.data = data;
+    ensureSelectedAsset();
+    render();
+  } catch (error) {
+    // The websocket reconnect path will keep trying too.
+  }
 }
 
 async function responseErrorText(response) {
@@ -537,6 +550,7 @@ document.addEventListener(
 window.addEventListener("resize", () => renderSnapshot());
 renderView();
 connectSocket();
+setInterval(refreshState, 3000);
 
 async function detectNewSignalsAndNotify(signals) {
   try {
