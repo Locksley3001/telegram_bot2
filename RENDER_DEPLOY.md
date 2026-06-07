@@ -43,7 +43,7 @@ IQ_OPTION_EMAIL -> Correo de inicio de sesion de la cuenta IQ Option.
 IQ_OPTION_PASSWORD -> Contrasena de la cuenta IQ Option.
 TELEGRAM_BOT_TOKEN -> Token del bot creado en @BotFather.
 TELEGRAM_CHAT_ID -> ID del chat, usuario, grupo o canal donde recibiras las senales.
-DATA_DIR -> Ruta donde se guardan historial, aprendizaje y estado de Telegram. En Render usa /var/data si montas un Persistent Disk.
+DATA_DIR -> Ruta donde se guardan historial, aprendizaje y estado de Telegram. En Render gratis dejala sin configurar o usa data. Con Persistent Disk usa /var/data.
 PYTHON_VERSION -> 3.12.8, solo si Render no detecta el archivo .python-version.
 ```
 
@@ -83,6 +83,7 @@ Con esto se conservan:
 - `/var/data/telegram_notifications.json`: senales/resultados/resumenes ya notificados.
 
 Si no montas disco persistente, Render puede perder esos JSON al redeplegar y el aprendizaje puede reiniciar.
+En el plan gratis no configures `DATA_DIR=/var/data`, porque esa ruta no sera escribible sin disco. Usa `DATA_DIR=data` o elimina la variable.
 
 ## 5. Tipo de servicio en Render
 

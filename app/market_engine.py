@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -277,9 +278,21 @@ class MarketEngine:
     @staticmethod
     def _data_path(settings: Settings) -> Path:
         configured = Path(settings.data_dir).expanduser()
-        if configured.is_absolute():
-            return configured
-        return BASE_DIR / configured
+        preferred = configured if configured.is_absolute() else BASE_DIR / configured
+        fallback = BASE_DIR / "data"
+        temp_fallback = Path(tempfile.gettempdir()) / "trading-bot-data"
+        for candidate in (preferred, fallback, temp_fallback):
+            try:
+                candidate.mkdir(parents=True, exist_ok=True)
+                probe = candidate / ".write-test"
+                probe.write_text("ok", encoding="utf-8")
+                probe.unlink(missing_ok=True)
+                if candidate != preferred:
+                    LOGGER.warning("DATA_DIR %s no es escribible; usando %s.", preferred, candidate)
+                return candidate
+            except OSError:
+                continue
+        return preferred
 
     def _load_signal_history(self) -> List[Signal]:
         if not self._signals_path.exists():
