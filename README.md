@@ -51,6 +51,11 @@ DEFAULT_TIMEFRAME=60
 POLL_INTERVAL_SECONDS=0.75
 CANDLE_COUNT=80
 SIGNAL_COOLDOWN_SECONDS=45
+LEARNING_ENABLED=true
+LEARNING_MIN_HISTORY=30
+LEARNING_MIN_WIN_RATE=58
+LEARNING_MIN_RULE_SAMPLES=5
+LEARNING_MIN_SIMILARITY_SAMPLES=4
 ```
 
 Telegram solo envia senales con puntuacion `>= 7`.
@@ -61,6 +66,9 @@ El historial de alertas se guarda en `data/signals.json`.
 
 El dashboard de rendimiento guarda las senales emitidas en `data/performance.json` y las evalua
 despues de la expiracion sugerida para medir ganadas, perdidas, empates, pendientes y acierto por mercado.
+
+El filtro de aprendizaje usa todo `data/performance.json`, guarda su memoria en `data/learning.json`
+y bloquea senales cuando casos historicos parecidos no superan el acierto minimo configurado.
 
 ## CONFIGURACION_MANUAL_REQUERIDA
 

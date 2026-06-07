@@ -103,6 +103,22 @@ class PerformanceSummary(BaseModel):
     recent_results: List[SignalOutcome] = Field(default_factory=list)
 
 
+class LearningSummary(BaseModel):
+    enabled: bool = True
+    resolved_examples: int = 0
+    wins: int = 0
+    losses: int = 0
+    global_win_rate: float = 0.0
+    min_win_rate: float = 0.0
+    min_history: int = 0
+    rules: int = 0
+    allowed_signals: int = 0
+    blocked_signals: int = 0
+    last_decision: str = ""
+    risky_patterns: List[str] = Field(default_factory=list)
+    updated_at: Optional[datetime] = None
+
+
 class EngineState(BaseModel):
     connected: bool
     broker_status: str
@@ -112,6 +128,7 @@ class EngineState(BaseModel):
     snapshots: Dict[str, AnalysisSnapshot]
     signals: List[Signal]
     performance: PerformanceSummary = Field(default_factory=PerformanceSummary)
+    learning: LearningSummary = Field(default_factory=LearningSummary)
     last_error: Optional[str] = None
 
 

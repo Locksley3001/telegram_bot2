@@ -40,6 +40,11 @@ const els = {
   perfLosses: document.getElementById("perfLosses"),
   perfPending: document.getElementById("perfPending"),
   perfAvgScore: document.getElementById("perfAvgScore"),
+  learningExamples: document.getElementById("learningExamples"),
+  learningMinRate: document.getElementById("learningMinRate"),
+  learningBlocked: document.getElementById("learningBlocked"),
+  learningStatus: document.getElementById("learningStatus"),
+  learningPatterns: document.getElementById("learningPatterns"),
   marketStats: document.getElementById("marketStats"),
   directionStats: document.getElementById("directionStats"),
   resultList: document.getElementById("resultList"),
@@ -293,9 +298,51 @@ function renderDashboard() {
   els.perfLosses.textContent = String(perf.losses || 0);
   els.perfPending.textContent = String(perf.pending || 0);
   els.perfAvgScore.textContent = Number(perf.avg_score || 0).toFixed(1);
+  renderLearning(state.data.learning || {});
   renderBuckets(els.marketStats, perf.by_market || [], "Sin operaciones evaluadas por mercado");
   renderBuckets(els.directionStats, perf.by_direction || [], "Sin operaciones evaluadas por dirección");
   renderResults(perf.recent_results || []);
+}
+
+function renderLearning(learning) {
+  els.learningExamples.textContent = String(learning.resolved_examples || 0);
+  els.learningMinRate.textContent = `${Number(learning.min_win_rate || 0).toFixed(1)}%`;
+  els.learningBlocked.textContent = String(learning.blocked_signals || 0);
+  els.learningStatus.textContent = learning.enabled ? "Activo" : "Pausado";
+  renderLearningPatterns(learning);
+}
+
+function renderLearningPatterns(learning) {
+  els.learningPatterns.innerHTML = "";
+  const patterns = learning.risky_patterns || [];
+  if (learning.last_decision) {
+    const row = document.createElement("article");
+    row.className = "stats-row";
+    row.innerHTML = `
+      <div class="stats-head">
+        <span>Ultima decision</span>
+      </div>
+      <div class="stats-meta">${learning.last_decision}</div>
+    `;
+    els.learningPatterns.appendChild(row);
+  }
+  if (!patterns.length) {
+    const empty = document.createElement("p");
+    empty.className = "market-meta";
+    empty.textContent = "Aun no hay patrones riesgosos con suficientes muestras.";
+    els.learningPatterns.appendChild(empty);
+    return;
+  }
+  patterns.forEach((pattern) => {
+    const row = document.createElement("article");
+    row.className = "stats-row";
+    row.innerHTML = `
+      <div class="stats-head">
+        <span>${pattern}</span>
+      </div>
+    `;
+    els.learningPatterns.appendChild(row);
+  });
 }
 
 function renderBuckets(container, buckets, emptyText) {

@@ -374,7 +374,7 @@ input:focus {
 
 .dashboard-view {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 12px;
   padding: 14px 18px;
   background: #fbfcfd;
@@ -387,7 +387,7 @@ input:focus {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
 }
 
@@ -450,6 +450,12 @@ input:focus {
 .dashboard-section h3 {
   margin: 0;
   font-size: 14px;
+}
+
+.learning-section header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .stats-list,

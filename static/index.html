@@ -92,6 +92,18 @@
               <span>Score medio</span>
               <strong id="perfAvgScore">0.0</strong>
             </article>
+            <article class="stat-tile">
+              <span>Aprendidos</span>
+              <strong id="learningExamples">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Filtro minimo</span>
+              <strong id="learningMinRate">0%</strong>
+            </article>
+            <article class="stat-tile loss">
+              <span>Bloqueadas</span>
+              <strong id="learningBlocked">0</strong>
+            </article>
           </div>
 
           <div class="dashboard-columns">
@@ -109,6 +121,14 @@
               <div id="directionStats" class="stats-list"></div>
             </section>
           </div>
+
+          <section class="dashboard-section learning-section">
+            <header>
+              <h3>Aprendizaje</h3>
+              <span id="learningStatus">Observando</span>
+            </header>
+            <div id="learningPatterns" class="stats-list"></div>
+          </section>
 
           <section class="dashboard-section results-section">
             <header>

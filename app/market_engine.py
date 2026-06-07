@@ -12,6 +12,7 @@ from fastapi import WebSocket
 from app.analysis import NO_EDGE_MESSAGE, PriceActionAnalyzer
 from app.config import Settings
 from app.iq_option_broker import IQOptionBroker
+from app.learning import SignalLearningSystem
 from app.models import AnalysisSnapshot, EngineState, Signal, utc_now
 from app.performance_tracker import PerformanceTracker
 from app.telegram_notifier import TelegramNotifier
@@ -34,6 +35,15 @@ class MarketEngine:
         self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
         self.analyzer = PriceActionAnalyzer()
         self.performance = PerformanceTracker(BASE_DIR / "data" / "performance.json")
+        self.learning = SignalLearningSystem(
+            BASE_DIR / "data" / "learning.json",
+            enabled=settings.learning_enabled,
+            min_history=settings.learning_min_history,
+            min_win_rate=settings.learning_min_win_rate,
+            min_rule_samples=settings.learning_min_rule_samples,
+            min_similarity_samples=settings.learning_min_similarity_samples,
+        )
+        self.learning.rebuild(self.performance.records.values())
         configured_markets = {self._normalize_market_label(market) for market in settings.market_list}
         configured_markets.discard("")
         self.active_markets: Set[str] = set(configured_markets)
@@ -125,6 +135,7 @@ class MarketEngine:
             snapshots=self.snapshots,
             signals=self.signals[-80:][::-1],
             performance=self.performance.summary(),
+            learning=self.learning.summary(),
             last_error=self.last_error,
         )
 
@@ -170,8 +181,17 @@ class MarketEngine:
             candles = await self.broker.get_realtime_candles(asset, self.timeframe)
             if len(candles) < 4:
                 candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
-            self.performance.evaluate(asset, candles)
+            if self.performance.evaluate(asset, candles):
+                self.learning.rebuild(self.performance.records.values())
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
+            if signal is not None:
+                decision = self.learning.decide(signal)
+                if decision.allowed:
+                    signal = self.learning.annotate_signal(signal, decision)
+                else:
+                    context["market_message"] = decision.reason
+                    context["reason"] = decision.reason
+                    signal = None
             snapshot = AnalysisSnapshot(
                 asset=asset,
                 timeframe=self.timeframe,
