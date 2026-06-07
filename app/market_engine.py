@@ -13,7 +13,7 @@ from app.analysis import NO_EDGE_MESSAGE, PriceActionAnalyzer
 from app.config import Settings
 from app.iq_option_broker import IQOptionBroker
 from app.learning import SignalLearningSystem
-from app.models import AnalysisSnapshot, EngineState, Signal, utc_now
+from app.models import AnalysisSnapshot, EngineState, Signal, SignalOutcome, utc_now
 from app.performance_tracker import PerformanceTracker
 from app.telegram_notifier import TelegramNotifier
 
@@ -59,6 +59,9 @@ class MarketEngine:
         if not self.signals:
             self.signals = self._signals_from_performance()
         self.notifier.remember_signals(signal.id for signal in self.signals)
+        self.notifier.remember_outcomes(
+            record.id for record in self.performance.records.values() if record.status != "pending"
+        )
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
@@ -138,7 +141,7 @@ class MarketEngine:
             active_markets=sorted(self.active_markets),
             timeframe=self.timeframe,
             snapshots=self.snapshots,
-            signals=self.signals[-80:][::-1],
+            signals=self._combined_signal_history(limit=200)[::-1],
             performance=self.performance.summary(),
             learning=self.learning.summary(),
             last_error=self.last_error,
@@ -189,7 +192,9 @@ class MarketEngine:
             resolved_records = self.performance.evaluate(asset, candles)
             if resolved_records:
                 self.learning.rebuild(self.performance.records.values())
-                await self.notifier.send_outcomes(resolved_records)
+            pending_outcomes = self.notifier.pending_outcomes(self.performance.records.values())
+            if pending_outcomes:
+                await self.notifier.send_outcomes(pending_outcomes)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
             if signal is not None:
                 decision = self.learning.decide(signal)
@@ -294,27 +299,35 @@ class MarketEngine:
     def _signals_from_performance(self) -> List[Signal]:
         signals: List[Signal] = []
         for record in sorted(self.performance.records.values(), key=lambda item: item.created_at)[-200:]:
-            signals.append(
-                Signal(
-                    id=record.id,
-                    asset=record.asset,
-                    direction=record.direction,
-                    score=record.score,
-                    grade="strong" if record.score >= 8 else "valid",
-                    strength=record.strength,
-                    continuity=record.continuity,
-                    exhaustion=record.exhaustion,
-                    cci=record.cci,
-                    main_reason=record.main_reason,
-                    suggested_expiration=record.suggested_expiration,
-                    created_at=record.created_at,
-                    price=record.entry_price,
-                    timeframe=record.timeframe,
-                )
-            )
+            signals.append(self._signal_from_record(record))
         if signals:
             self._save_signal_history(signals)
         return signals
+
+    def _combined_signal_history(self, limit: int = 200) -> List[Signal]:
+        by_id: Dict[str, Signal] = {signal.id: signal for signal in self.signals}
+        for record in self.performance.records.values():
+            by_id.setdefault(record.id, self._signal_from_record(record))
+        return sorted(by_id.values(), key=lambda signal: signal.created_at)[-limit:]
+
+    @staticmethod
+    def _signal_from_record(record: SignalOutcome) -> Signal:
+        return Signal(
+            id=record.id,
+            asset=record.asset,
+            direction=record.direction,
+            score=record.score,
+            grade="strong" if record.score >= 8 else "valid",
+            strength=record.strength,
+            continuity=record.continuity,
+            exhaustion=record.exhaustion,
+            cci=record.cci,
+            main_reason=record.main_reason,
+            suggested_expiration=record.suggested_expiration,
+            created_at=record.created_at,
+            price=record.entry_price,
+            timeframe=record.timeframe,
+        )
 
     def _save_signal_history(self, signals: Optional[List[Signal]] = None) -> None:
         self._signals_path.parent.mkdir(parents=True, exist_ok=True)

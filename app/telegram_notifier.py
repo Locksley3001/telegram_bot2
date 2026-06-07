@@ -81,6 +81,22 @@ class TelegramNotifier:
         if changed:
             self._save_state()
 
+    def remember_outcomes(self, outcome_ids: Iterable[str]) -> None:
+        changed = False
+        for outcome_id in outcome_ids:
+            if outcome_id and outcome_id not in self._result_sent_ids:
+                self._result_sent_ids.add(outcome_id)
+                changed = True
+        if changed:
+            self._save_state()
+
+    def pending_outcomes(self, records: Iterable[SignalOutcome]) -> List[SignalOutcome]:
+        return [
+            record
+            for record in records
+            if record.status != "pending" and record.id not in self._result_sent_ids
+        ]
+
     async def _send_outcome_unlocked(self, record: SignalOutcome) -> None:
         if self._bot is None:
             return

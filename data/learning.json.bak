@@ -1,10 +1,10 @@
 {
   "version": 1,
   "enabled": true,
-  "resolved_examples": 249,
-  "wins": 124,
-  "losses": 125,
-  "global_win_rate": 49.7992,
+  "resolved_examples": 257,
+  "wins": 127,
+  "losses": 130,
+  "global_win_rate": 49.4163,
   "min_win_rate": 58.0,
   "min_history": 30,
   "min_rule_samples": 5,
@@ -12,40 +12,40 @@
   "allowed_signals": 0,
   "blocked_signals": 0,
   "last_decision": "",
-  "signature": "b968ccf9d52598f5d29ac262c8832cc8822b4c6b940addee3464097ee156ad00",
-  "updated_at": "2026-06-07T17:46:24.831946+00:00",
+  "signature": "617ca108fce97d873c7d96bd7b6d84d4da2eb63651d4a4341f6bb7c4eefb8a5b",
+  "updated_at": "2026-06-07T17:57:38.715914+00:00",
   "rules": {
     "global": {
-      "wins": 124.0,
-      "losses": 125.0,
+      "wins": 127.0,
+      "losses": 130.0,
       "weight": 0.45,
       "specificity": 0.0,
       "label": "historial completo"
     },
     "asset:GBPUSD-OTC": {
-      "wins": 21.0,
+      "wins": 22.0,
       "losses": 16.0,
       "weight": 1.05,
       "specificity": 1.0,
       "label": "mercado GBPUSD-OTC"
     },
     "direction:PUT": {
-      "wins": 57.0,
-      "losses": 51.0,
+      "wins": 58.0,
+      "losses": 53.0,
       "weight": 0.8,
       "specificity": 1.0,
       "label": "direccion PUT"
     },
     "timeframe:60": {
-      "wins": 124.0,
-      "losses": 125.0,
+      "wins": 127.0,
+      "losses": 130.0,
       "weight": 0.45,
       "specificity": 1.0,
       "label": "timeframe 60s"
     },
     "score:9": {
-      "wins": 54.0,
-      "losses": 39.0,
+      "wins": 56.0,
+      "losses": 40.0,
       "weight": 0.7,
       "specificity": 1.0,
       "label": "score 9/10"
@@ -58,7 +58,7 @@
       "label": "GBPUSD-OTC PUT"
     },
     "direction_score:PUT:9": {
-      "wins": 24.0,
+      "wins": 25.0,
       "losses": 16.0,
       "weight": 1.05,
       "specificity": 2.0,
@@ -121,7 +121,7 @@
       "label": "GBPUSD-OTC perfil PUT|score:9|fuerza:7-8|continuidad:8-9|cansancio:4-5|sobrecompra|150-174"
     },
     "cci:PUT:sobrecompra:175-199": {
-      "wins": 5.0,
+      "wins": 6.0,
       "losses": 7.0,
       "weight": 1.15,
       "specificity": 2.0,
@@ -129,7 +129,7 @@
     },
     "strength:PUT:fuerza:6-7": {
       "wins": 15.0,
-      "losses": 13.0,
+      "losses": 14.0,
       "weight": 0.95,
       "specificity": 2.0,
       "label": "PUT fuerza fuerza:6-7"
@@ -142,8 +142,8 @@
       "label": "PUT continuidad continuidad:9-10"
     },
     "exhaustion:PUT:cansancio:3-4": {
-      "wins": 21.0,
-      "losses": 21.0,
+      "wins": 22.0,
+      "losses": 22.0,
       "weight": 0.9,
       "specificity": 2.0,
       "label": "PUT cansancio cansancio:3-4"
@@ -164,35 +164,35 @@
     },
     "asset:EURUSD-OTC": {
       "wins": 17.0,
-      "losses": 22.0,
+      "losses": 24.0,
       "weight": 1.05,
       "specificity": 1.0,
       "label": "mercado EURUSD-OTC"
     },
     "direction:CALL": {
-      "wins": 67.0,
-      "losses": 74.0,
+      "wins": 69.0,
+      "losses": 77.0,
       "weight": 0.8,
       "specificity": 1.0,
       "label": "direccion CALL"
     },
     "score:8": {
-      "wins": 51.0,
-      "losses": 62.0,
+      "wins": 52.0,
+      "losses": 64.0,
       "weight": 0.7,
       "specificity": 1.0,
       "label": "score 8/10"
     },
     "asset_direction:EURUSD-OTC:CALL": {
       "wins": 11.0,
-      "losses": 14.0,
+      "losses": 16.0,
       "weight": 1.55,
       "specificity": 2.0,
       "label": "EURUSD-OTC CALL"
     },
     "direction_score:CALL:8": {
-      "wins": 28.0,
-      "losses": 36.0,
+      "wins": 29.0,
+      "losses": 37.0,
       "weight": 1.05,
       "specificity": 2.0,
       "label": "CALL con score 8/10"
@@ -213,21 +213,21 @@
     },
     "cci:CALL:sobreventa:100-124": {
       "wins": 9.0,
-      "losses": 19.0,
+      "losses": 20.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "CALL en sobreventa CCI 100-124"
     },
     "strength:CALL:fuerza:5-6": {
-      "wins": 16.0,
+      "wins": 17.0,
       "losses": 15.0,
       "weight": 0.95,
       "specificity": 2.0,
       "label": "CALL fuerza fuerza:5-6"
     },
     "continuity:CALL:continuidad:8-9": {
-      "wins": 16.0,
-      "losses": 14.0,
+      "wins": 17.0,
+      "losses": 16.0,
       "weight": 0.85,
       "specificity": 2.0,
       "label": "CALL continuidad continuidad:8-9"
@@ -254,15 +254,15 @@
       "label": "EURUSD-OTC perfil CALL|score:8|fuerza:5-6|continuidad:8-9|cansancio:5-6|sobreventa|100-124"
     },
     "continuity:CALL:continuidad:6-7": {
-      "wins": 8.0,
+      "wins": 9.0,
       "losses": 17.0,
       "weight": 0.85,
       "specificity": 2.0,
       "label": "CALL continuidad continuidad:6-7"
     },
     "exhaustion:CALL:cansancio:3-4": {
-      "wins": 23.0,
-      "losses": 39.0,
+      "wins": 24.0,
+      "losses": 40.0,
       "weight": 0.9,
       "specificity": 2.0,
       "label": "CALL cansancio cansancio:3-4"
@@ -282,28 +282,28 @@
       "label": "EURUSD-OTC perfil CALL|score:8|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobreventa|100-124"
     },
     "asset:USDJPY-OTC": {
-      "wins": 20.0,
-      "losses": 14.0,
+      "wins": 21.0,
+      "losses": 15.0,
       "weight": 1.05,
       "specificity": 1.0,
       "label": "mercado USDJPY-OTC"
     },
     "asset_direction:USDJPY-OTC:PUT": {
-      "wins": 10.0,
-      "losses": 8.0,
+      "wins": 11.0,
+      "losses": 9.0,
       "weight": 1.55,
       "specificity": 2.0,
       "label": "USDJPY-OTC PUT"
     },
     "asset_score:USDJPY-OTC:9": {
-      "wins": 7.0,
+      "wins": 8.0,
       "losses": 5.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "USDJPY-OTC con score 9/10"
     },
     "asset_direction_score:USDJPY-OTC:PUT:9": {
-      "wins": 4.0,
+      "wins": 5.0,
       "losses": 3.0,
       "weight": 1.95,
       "specificity": 3.0,
@@ -311,7 +311,7 @@
     },
     "cci:PUT:sobrecompra:100-124": {
       "wins": 18.0,
-      "losses": 20.0,
+      "losses": 22.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "PUT en sobrecompra CCI 100-124"
@@ -345,22 +345,22 @@
       "label": "USDJPY-OTC perfil PUT|score:9|fuerza:2-3|continuidad:9-10|cansancio:6-7|sobrecompra|100-124"
     },
     "direction_score:CALL:9": {
-      "wins": 30.0,
-      "losses": 23.0,
+      "wins": 31.0,
+      "losses": 24.0,
       "weight": 1.05,
       "specificity": 2.0,
       "label": "CALL con score 9/10"
     },
     "asset_score:EURUSD-OTC:9": {
       "wins": 7.0,
-      "losses": 8.0,
+      "losses": 9.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "EURUSD-OTC con score 9/10"
     },
     "asset_direction_score:EURUSD-OTC:CALL:9": {
       "wins": 4.0,
-      "losses": 4.0,
+      "losses": 5.0,
       "weight": 1.95,
       "specificity": 3.0,
       "label": "EURUSD-OTC CALL score 9/10"
@@ -374,7 +374,7 @@
     },
     "strength:CALL:fuerza:3-4": {
       "wins": 4.0,
-      "losses": 11.0,
+      "losses": 12.0,
       "weight": 0.95,
       "specificity": 2.0,
       "label": "CALL fuerza fuerza:3-4"
@@ -409,7 +409,7 @@
     },
     "score:7": {
       "wins": 12.0,
-      "losses": 21.0,
+      "losses": 23.0,
       "weight": 0.7,
       "specificity": 1.0,
       "label": "score 7/10"
@@ -423,7 +423,7 @@
     },
     "direction_score:CALL:7": {
       "wins": 6.0,
-      "losses": 12.0,
+      "losses": 13.0,
       "weight": 1.05,
       "specificity": 2.0,
       "label": "CALL con score 7/10"
@@ -513,7 +513,7 @@
       "label": "ETHUSD-OTC perfil CALL|score:9|fuerza:6-7|continuidad:7-8|cansancio:4-5|sobreventa|100-124"
     },
     "cci:CALL:sobreventa:150-174": {
-      "wins": 23.0,
+      "wins": 24.0,
       "losses": 17.0,
       "weight": 1.15,
       "specificity": 2.0,
@@ -577,14 +577,14 @@
     },
     "asset:NVDA/AMD-OTC": {
       "wins": 15.0,
-      "losses": 26.0,
+      "losses": 27.0,
       "weight": 1.05,
       "specificity": 1.0,
       "label": "mercado NVDA/AMD-OTC"
     },
     "asset_direction:NVDA/AMD-OTC:PUT": {
       "wins": 11.0,
-      "losses": 8.0,
+      "losses": 9.0,
       "weight": 1.55,
       "specificity": 2.0,
       "label": "NVDA/AMD-OTC PUT"
@@ -619,7 +619,7 @@
     },
     "continuity:PUT:continuidad:7-8": {
       "wins": 15.0,
-      "losses": 7.0,
+      "losses": 8.0,
       "weight": 0.85,
       "specificity": 2.0,
       "label": "PUT continuidad continuidad:7-8"
@@ -647,7 +647,7 @@
     },
     "direction_score:PUT:8": {
       "wins": 23.0,
-      "losses": 26.0,
+      "losses": 27.0,
       "weight": 1.05,
       "specificity": 2.0,
       "label": "PUT con score 8/10"
@@ -737,8 +737,8 @@
       "label": "USDJPY-OTC CALL score 9/10"
     },
     "strength:CALL:fuerza:4-5": {
-      "wins": 10.0,
-      "losses": 26.0,
+      "wins": 11.0,
+      "losses": 28.0,
       "weight": 0.95,
       "specificity": 2.0,
       "label": "CALL fuerza fuerza:4-5"
@@ -766,7 +766,7 @@
     },
     "asset_score:USDJPY-OTC:8": {
       "wins": 9.0,
-      "losses": 7.0,
+      "losses": 8.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "USDJPY-OTC con score 8/10"
@@ -822,7 +822,7 @@
     },
     "exhaustion:PUT:cansancio:5-6": {
       "wins": 6.0,
-      "losses": 4.0,
+      "losses": 5.0,
       "weight": 0.9,
       "specificity": 2.0,
       "label": "PUT cansancio cansancio:5-6"
@@ -842,8 +842,8 @@
       "label": "GBPUSD-OTC perfil PUT|score:9|fuerza:4-5|continuidad:9-10|cansancio:5-6|sobrecompra|100-124"
     },
     "asset:SOLUSD-OTC": {
-      "wins": 14.0,
-      "losses": 24.0,
+      "wins": 15.0,
+      "losses": 25.0,
       "weight": 1.05,
       "specificity": 1.0,
       "label": "mercado SOLUSD-OTC"
@@ -857,7 +857,7 @@
     },
     "asset_score:SOLUSD-OTC:8": {
       "wins": 4.0,
-      "losses": 15.0,
+      "losses": 16.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "SOLUSD-OTC con score 8/10"
@@ -899,7 +899,7 @@
     },
     "asset_direction_score:USDJPY-OTC:PUT:8": {
       "wins": 4.0,
-      "losses": 4.0,
+      "losses": 5.0,
       "weight": 1.95,
       "specificity": 3.0,
       "label": "USDJPY-OTC PUT score 8/10"
@@ -954,21 +954,21 @@
       "label": "EURUSD-OTC perfil PUT|score:9|fuerza:4-5|continuidad:8-9|cansancio:3-4|sobrecompra|250-274"
     },
     "asset_direction:GBPUSD-OTC:CALL": {
-      "wins": 12.0,
+      "wins": 13.0,
       "losses": 8.0,
       "weight": 1.55,
       "specificity": 2.0,
       "label": "GBPUSD-OTC CALL"
     },
     "asset_score:GBPUSD-OTC:8": {
-      "wins": 10.0,
+      "wins": 11.0,
       "losses": 7.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "GBPUSD-OTC con score 8/10"
     },
     "asset_direction_score:GBPUSD-OTC:CALL:8": {
-      "wins": 7.0,
+      "wins": 8.0,
       "losses": 6.0,
       "weight": 1.95,
       "specificity": 3.0,
@@ -1017,8 +1017,8 @@
       "label": "USDJPY-OTC PUT score 10/10"
     },
     "strength:PUT:fuerza:5-6": {
-      "wins": 14.0,
-      "losses": 10.0,
+      "wins": 15.0,
+      "losses": 11.0,
       "weight": 0.95,
       "specificity": 2.0,
       "label": "PUT fuerza fuerza:5-6"
@@ -1038,8 +1038,8 @@
       "label": "USDJPY-OTC perfil PUT|score:10|fuerza:5-6|continuidad:8-9|cansancio:3-4|sobrecompra|150-174"
     },
     "exhaustion:CALL:cansancio:2-3": {
-      "wins": 13.0,
-      "losses": 12.0,
+      "wins": 14.0,
+      "losses": 14.0,
       "weight": 0.9,
       "specificity": 2.0,
       "label": "CALL cansancio cansancio:2-3"
@@ -1087,8 +1087,8 @@
       "label": "EURUSD-OTC perfil CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|150-174"
     },
     "asset_direction:SOLUSD-OTC:CALL": {
-      "wins": 9.0,
-      "losses": 16.0,
+      "wins": 10.0,
+      "losses": 17.0,
       "weight": 1.55,
       "specificity": 2.0,
       "label": "SOLUSD-OTC CALL"
@@ -1115,7 +1115,7 @@
       "label": "SOLUSD-OTC CALL score 10/10"
     },
     "cci:CALL:sobreventa:175-199": {
-      "wins": 11.0,
+      "wins": 12.0,
       "losses": 12.0,
       "weight": 1.15,
       "specificity": 2.0,
@@ -1123,7 +1123,7 @@
     },
     "continuity:CALL:continuidad:10-10": {
       "wins": 6.0,
-      "losses": 9.0,
+      "losses": 10.0,
       "weight": 0.85,
       "specificity": 2.0,
       "label": "CALL continuidad continuidad:10-10"
@@ -1227,7 +1227,7 @@
       "label": "GBPUSD-OTC perfil CALL|score:8|fuerza:4-5|continuidad:6-7|cansancio:3-4|sobreventa|150-174"
     },
     "asset_score:SOLUSD-OTC:9": {
-      "wins": 8.0,
+      "wins": 9.0,
       "losses": 6.0,
       "weight": 1.15,
       "specificity": 2.0,
@@ -1382,7 +1382,7 @@
     },
     "cci:CALL:sobreventa:200-224": {
       "wins": 6.0,
-      "losses": 5.0,
+      "losses": 7.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "CALL en sobreventa CCI 200-224"
@@ -1431,7 +1431,7 @@
     },
     "asset_score:NVDA/AMD-OTC:7": {
       "wins": 1.0,
-      "losses": 11.0,
+      "losses": 12.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "NVDA/AMD-OTC con score 7/10"
@@ -1577,7 +1577,7 @@
       "label": "PUT fuerza fuerza:3-4"
     },
     "continuity:PUT:continuidad:6-7": {
-      "wins": 8.0,
+      "wins": 9.0,
       "losses": 6.0,
       "weight": 0.85,
       "specificity": 2.0,
@@ -1648,7 +1648,7 @@
     },
     "direction_score:PUT:7": {
       "wins": 6.0,
-      "losses": 9.0,
+      "losses": 10.0,
       "weight": 1.05,
       "specificity": 2.0,
       "label": "PUT con score 7/10"
@@ -1725,14 +1725,14 @@
     },
     "asset_score:EURUSD-OTC:7": {
       "wins": 2.0,
-      "losses": 5.0,
+      "losses": 6.0,
       "weight": 1.15,
       "specificity": 2.0,
       "label": "EURUSD-OTC con score 7/10"
     },
     "asset_direction_score:EURUSD-OTC:CALL:7": {
       "wins": 1.0,
-      "losses": 3.0,
+      "losses": 4.0,
       "weight": 1.95,
       "specificity": 3.0,
       "label": "EURUSD-OTC CALL score 7/10"
@@ -1899,7 +1899,7 @@
       "label": "ETHUSD-OTC perfil CALL|score:9|fuerza:7-8|continuidad:9-10|cansancio:3-4|sobreventa|175-199"
     },
     "asset_direction_score:SOLUSD-OTC:CALL:9": {
-      "wins": 6.0,
+      "wins": 7.0,
       "losses": 4.0,
       "weight": 1.95,
       "specificity": 3.0,
@@ -1942,7 +1942,7 @@
     },
     "asset_direction_score:SOLUSD-OTC:CALL:8": {
       "wins": 3.0,
-      "losses": 10.0,
+      "losses": 11.0,
       "weight": 1.95,
       "specificity": 3.0,
       "label": "SOLUSD-OTC CALL score 8/10"
@@ -2152,7 +2152,7 @@
     },
     "continuity:PUT:continuidad:5-6": {
       "wins": 3.0,
-      "losses": 3.0,
+      "losses": 4.0,
       "weight": 0.85,
       "specificity": 2.0,
       "label": "PUT continuidad continuidad:5-6"
@@ -2544,7 +2544,7 @@
     },
     "asset_direction_score:NVDA/AMD-OTC:PUT:7": {
       "wins": 1.0,
-      "losses": 3.0,
+      "losses": 4.0,
       "weight": 1.95,
       "specificity": 3.0,
       "label": "NVDA/AMD-OTC PUT score 7/10"
@@ -4550,11 +4550,123 @@
       "weight": 2.65,
       "specificity": 4.0,
       "label": "SOLUSD-OTC perfil CALL|score:9|fuerza:3-4|continuidad:8-9|cansancio:5-6|sobreventa|125-149"
+    },
+    "metrics:CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|175-199": {
+      "wins": 1.0,
+      "losses": 0.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|175-199"
+    },
+    "asset_metrics:GBPUSD-OTC:CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|175-199": {
+      "wins": 1.0,
+      "losses": 0.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "GBPUSD-OTC perfil CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|175-199"
+    },
+    "metrics:CALL|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobreventa|150-174": {
+      "wins": 1.0,
+      "losses": 0.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil CALL|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobreventa|150-174"
+    },
+    "asset_metrics:SOLUSD-OTC:CALL|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobreventa|150-174": {
+      "wins": 1.0,
+      "losses": 0.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "SOLUSD-OTC perfil CALL|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobreventa|150-174"
+    },
+    "metrics:PUT|score:8|fuerza:5-6|continuidad:7-8|cansancio:5-6|sobrecompra|100-124": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil PUT|score:8|fuerza:5-6|continuidad:7-8|cansancio:5-6|sobrecompra|100-124"
+    },
+    "asset_metrics:USDJPY-OTC:PUT|score:8|fuerza:5-6|continuidad:7-8|cansancio:5-6|sobrecompra|100-124": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "USDJPY-OTC perfil PUT|score:8|fuerza:5-6|continuidad:7-8|cansancio:5-6|sobrecompra|100-124"
+    },
+    "metrics:CALL|score:7|fuerza:3-4|continuidad:8-9|cansancio:3-4|sobreventa|100-124": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil CALL|score:7|fuerza:3-4|continuidad:8-9|cansancio:3-4|sobreventa|100-124"
+    },
+    "asset_metrics:EURUSD-OTC:CALL|score:7|fuerza:3-4|continuidad:8-9|cansancio:3-4|sobreventa|100-124": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "EURUSD-OTC perfil CALL|score:7|fuerza:3-4|continuidad:8-9|cansancio:3-4|sobreventa|100-124"
+    },
+    "metrics:CALL|score:9|fuerza:4-5|continuidad:10-10|cansancio:2-3|sobreventa|200-224": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil CALL|score:9|fuerza:4-5|continuidad:10-10|cansancio:2-3|sobreventa|200-224"
+    },
+    "asset_metrics:EURUSD-OTC:CALL|score:9|fuerza:4-5|continuidad:10-10|cansancio:2-3|sobreventa|200-224": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "EURUSD-OTC perfil CALL|score:9|fuerza:4-5|continuidad:10-10|cansancio:2-3|sobreventa|200-224"
+    },
+    "metrics:PUT|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobrecompra|175-199": {
+      "wins": 1.0,
+      "losses": 0.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil PUT|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobrecompra|175-199"
+    },
+    "asset_metrics:USDJPY-OTC:PUT|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobrecompra|175-199": {
+      "wins": 1.0,
+      "losses": 0.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "USDJPY-OTC perfil PUT|score:9|fuerza:5-6|continuidad:6-7|cansancio:3-4|sobrecompra|175-199"
+    },
+    "metrics:PUT|score:7|fuerza:6-7|continuidad:5-6|cansancio:3-4|sobrecompra|100-124": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil PUT|score:7|fuerza:6-7|continuidad:5-6|cansancio:3-4|sobrecompra|100-124"
+    },
+    "asset_metrics:NVDA/AMD-OTC:PUT|score:7|fuerza:6-7|continuidad:5-6|cansancio:3-4|sobrecompra|100-124": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "NVDA/AMD-OTC perfil PUT|score:7|fuerza:6-7|continuidad:5-6|cansancio:3-4|sobrecompra|100-124"
+    },
+    "metrics:CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|200-224": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.2,
+      "specificity": 3.0,
+      "label": "perfil CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|200-224"
+    },
+    "asset_metrics:SOLUSD-OTC:CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|200-224": {
+      "wins": 0.0,
+      "losses": 1.0,
+      "weight": 2.65,
+      "specificity": 4.0,
+      "label": "SOLUSD-OTC perfil CALL|score:8|fuerza:4-5|continuidad:8-9|cansancio:2-3|sobreventa|200-224"
     }
   },
   "risky_patterns": [
     "NVDA/AMD-OTC CALL score 7/10: 0.0% (0G/8P)",
-    "NVDA/AMD-OTC con score 7/10: 8.3% (1G/11P)",
+    "NVDA/AMD-OTC con score 7/10: 7.7% (1G/12P)",
     "NVDA/AMD-OTC CALL score 8/10: 14.3% (1G/6P)",
     "BTCUSD-OTC PUT score 8/10: 16.7% (2G/10P)",
     "SOLUSD-OTC PUT score 8/10: 16.7% (1G/5P)"
