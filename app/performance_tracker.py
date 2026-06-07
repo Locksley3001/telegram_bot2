@@ -37,7 +37,7 @@ class PerformanceTracker:
         )
         self._save()
 
-    def evaluate(self, asset: str, candles: List[Candle]) -> bool:
+    def evaluate(self, asset: str, candles: List[Candle]) -> List[SignalOutcome]:
         asset = self._normalize_asset(asset)
         pending = [
             record
@@ -45,10 +45,11 @@ class PerformanceTracker:
             if record.asset == asset and record.status == "pending" and record.expires_at <= utc_now()
         ]
         if not pending:
-            return False
+            return []
 
         closed = [candle for candle in candles if candle.is_closed]
         changed = False
+        resolved_records: List[SignalOutcome] = []
         for record in pending:
             result_candle = self._result_candle(record, closed)
             if result_candle is None:
@@ -65,10 +66,11 @@ class PerformanceTracker:
             else:
                 record.status = "push"
             changed = True
+            resolved_records.append(record)
 
         if changed:
             self._save()
-        return changed
+        return resolved_records
 
     def summary(self) -> PerformanceSummary:
         records = list(self.records.values())

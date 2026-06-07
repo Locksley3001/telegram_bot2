@@ -32,7 +32,11 @@ class MarketEngine:
             balance_mode=settings.iq_option_balance_mode,
             stream_max_candles=settings.candle_count,
         )
-        self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
+        self.notifier = TelegramNotifier(
+            settings.telegram_bot_token,
+            settings.telegram_chat_id,
+            BASE_DIR / "data" / "telegram_notifications.json",
+        )
         self.analyzer = PriceActionAnalyzer()
         self.performance = PerformanceTracker(BASE_DIR / "data" / "performance.json")
         self.learning = SignalLearningSystem(
@@ -54,6 +58,7 @@ class MarketEngine:
         self.signals: List[Signal] = self._load_signal_history()
         if not self.signals:
             self.signals = self._signals_from_performance()
+        self.notifier.remember_signals(signal.id for signal in self.signals)
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
@@ -181,8 +186,10 @@ class MarketEngine:
             candles = await self.broker.get_realtime_candles(asset, self.timeframe)
             if len(candles) < 4:
                 candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
-            if self.performance.evaluate(asset, candles):
+            resolved_records = self.performance.evaluate(asset, candles)
+            if resolved_records:
                 self.learning.rebuild(self.performance.records.values())
+                await self.notifier.send_outcomes(resolved_records)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
             if signal is not None:
                 decision = self.learning.decide(signal)
