@@ -43,6 +43,7 @@ IQ_OPTION_EMAIL -> Correo de inicio de sesion de la cuenta IQ Option.
 IQ_OPTION_PASSWORD -> Contrasena de la cuenta IQ Option.
 TELEGRAM_BOT_TOKEN -> Token del bot creado en @BotFather.
 TELEGRAM_CHAT_ID -> ID del chat, usuario, grupo o canal donde recibiras las senales.
+DATA_DIR -> Ruta donde se guardan historial, aprendizaje y estado de Telegram. En Render usa /var/data si montas un Persistent Disk.
 PYTHON_VERSION -> 3.12.8, solo si Render no detecta el archivo .python-version.
 ```
 
@@ -54,25 +55,51 @@ DEFAULT_TIMEFRAME -> 30, 45, 60, 120, 180 o 300. Por defecto: 60.
 POLL_INTERVAL_SECONDS -> Frecuencia de consulta al broker. Por defecto: 2.0.
 CANDLE_COUNT -> Cantidad de velas analizadas por activo. Por defecto: 80.
 SIGNAL_COOLDOWN_SECONDS -> Enfriamiento por activo/direccion. Por defecto: 45.
+SIGNAL_HISTORY_LIMIT -> Senales conservadas en signals.json. Por defecto: 1000.
+API_SIGNAL_LIMIT -> Senales recientes enviadas al dashboard. Por defecto: 500.
 IQ_OPTION_BALANCE_MODE -> PRACTICE o REAL. Por defecto: PRACTICE.
 IQ_OPTION_2FA_CODE -> Codigo temporal si IQ Option solicita 2FA/SMS.
+LEARNING_ENABLED -> Activa o pausa el filtro de aprendizaje. Por defecto: true.
+LEARNING_MIN_HISTORY -> Casos resueltos antes de bloquear por aprendizaje. Por defecto: 30.
+LEARNING_MIN_WIN_RATE -> Porcentaje minimo esperado para permitir una senal. Por defecto: 58.
+LEARNING_EXPLORATION_INTERVAL -> Permite una senal fuerte cada N bloqueos para seguir aprendiendo. Por defecto: 20. Usa 0 para desactivarlo.
 ```
 
-## 4. Tipo de servicio en Render
+## 4. Persistencia en Render
+
+Para que el aprendizaje continue despues de redeploys/restarts, agrega un **Persistent Disk** al Web Service.
+Usa por ejemplo:
+
+```text
+Mount Path -> /var/data
+DATA_DIR -> /var/data
+```
+
+Con esto se conservan:
+
+- `/var/data/performance.json`: operaciones emitidas y resultados.
+- `/var/data/learning.json`: memoria del filtro de aprendizaje.
+- `/var/data/signals.json`: historial de senales.
+- `/var/data/telegram_notifications.json`: senales/resultados/resumenes ya notificados.
+
+Si no montas disco persistente, Render puede perder esos JSON al redeplegar y el aprendizaje puede reiniciar.
+
+## 5. Tipo de servicio en Render
 
 Crea un **Web Service**.
 
 La aplicacion necesita servir el panel web, exponer el WebSocket `/ws`, responder `/health` y ejecutar el motor de analisis en segundo plano dentro del mismo proceso. Un Background Worker no expone el panel ni el puerto HTTP que Render necesita para enrutar trafico web.
 
-## 5. Consideraciones para produccion
+## 6. Consideraciones para produccion
 
 - Despues de configurar variables y redeplegar, abre `/health`. Debe mostrar `iq_option_configured: true` y `telegram_configured: true`.
+- `/health` tambien muestra `data_dir`, `signal_history_limit`, `api_signal_limit` y `telegram_last_error` sin revelar credenciales.
 - El servidor web arranca aunque `IQ_OPTION_EMAIL` o `IQ_OPTION_PASSWORD` no esten configurados; mostrara el estado en pantalla y seguira respondiendo `/health`.
 - Si IQ Option exige 2FA, el estado mostrara un error con `CONFIGURACION_MANUAL_REQUERIDA`; configura `IQ_OPTION_2FA_CODE` con el codigo vigente y redepliega.
 - El motor de mercado corre como tarea asincrona separada del servidor FastAPI.
 - Si falla la conexion con IQ Option, el motor cambia a estado de reconexion y vuelve a intentar sin tumbar el proceso.
 - Cada activo se analiza con manejo de errores propio; una vela defectuosa o un activo fallido no detiene el resto.
-- Telegram se ejecuta solo para senales con puntuacion `>= 6` y no debe bloquear la respuesta HTTP del servidor.
+- Telegram se ejecuta solo para senales con puntuacion `>= 7` y no debe bloquear la respuesta HTTP del servidor.
 - Render debe usar siempre `PORT`; el comando de inicio ya incluye `--port $PORT`.
 - Para reducir carga, usa pocos mercados al comienzo y sube gradualmente. El sistema permite agregar mercados sin limite funcional, pero el broker y el plan de Render pueden imponer limites reales de conexion, latencia o CPU.
 - Mantener `POLL_INTERVAL_SECONDS` en `2.0` o superior evita consultas excesivas al broker.

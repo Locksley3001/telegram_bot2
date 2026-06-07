@@ -64,6 +64,10 @@ async def health() -> dict:
         "iq_option_balance_mode": settings.iq_option_balance_mode,
         "iq_option_2fa_configured": bool(settings.iq_option_2fa_code),
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
+        "telegram_last_error": engine.notifier.last_error,
+        "data_dir": str(engine._data_dir),
+        "signal_history_limit": settings.signal_history_limit,
+        "api_signal_limit": settings.api_signal_limit,
         "version": "iq-option-migration-2026-06-03",
     }
 

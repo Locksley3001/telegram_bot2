@@ -259,7 +259,10 @@ function renderSnapshot() {
 
 function renderSignals() {
   const signals = state.data.signals || [];
-  els.signalCount.textContent = String(signals.length);
+  const total = Number(state.data.signal_history_total || signals.length);
+  els.signalCount.textContent = total > signals.length ? `${signals.length}/${total}` : String(total);
+  els.signalCount.title =
+    total > signals.length ? `Mostrando ${signals.length} de ${total} senales guardadas` : `${total} senales guardadas`;
   els.signalsList.innerHTML = "";
 
   if (!signals.length) {

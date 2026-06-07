@@ -24,11 +24,15 @@ class Settings(BaseSettings):
     poll_interval_seconds: float = Field(default=0.75, alias="POLL_INTERVAL_SECONDS")
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
     signal_cooldown_seconds: int = Field(default=45, alias="SIGNAL_COOLDOWN_SECONDS")
+    data_dir: str = Field(default="data", alias="DATA_DIR")
+    signal_history_limit: int = Field(default=1000, alias="SIGNAL_HISTORY_LIMIT")
+    api_signal_limit: int = Field(default=500, alias="API_SIGNAL_LIMIT")
     learning_enabled: bool = Field(default=True, alias="LEARNING_ENABLED")
     learning_min_history: int = Field(default=30, alias="LEARNING_MIN_HISTORY")
     learning_min_win_rate: float = Field(default=58.0, alias="LEARNING_MIN_WIN_RATE")
     learning_min_rule_samples: int = Field(default=5, alias="LEARNING_MIN_RULE_SAMPLES")
     learning_min_similarity_samples: int = Field(default=4, alias="LEARNING_MIN_SIMILARITY_SAMPLES")
+    learning_exploration_interval: int = Field(default=20, alias="LEARNING_EXPLORATION_INTERVAL")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 

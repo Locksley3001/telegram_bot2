@@ -32,20 +32,24 @@ class MarketEngine:
             balance_mode=settings.iq_option_balance_mode,
             stream_max_candles=settings.candle_count,
         )
+        self._data_dir = self._data_path(settings)
+        self._signal_history_limit = max(1, settings.signal_history_limit)
+        self._api_signal_limit = max(1, settings.api_signal_limit)
         self.notifier = TelegramNotifier(
             settings.telegram_bot_token,
             settings.telegram_chat_id,
-            BASE_DIR / "data" / "telegram_notifications.json",
+            self._data_dir / "telegram_notifications.json",
         )
         self.analyzer = PriceActionAnalyzer()
-        self.performance = PerformanceTracker(BASE_DIR / "data" / "performance.json")
+        self.performance = PerformanceTracker(self._data_dir / "performance.json")
         self.learning = SignalLearningSystem(
-            BASE_DIR / "data" / "learning.json",
+            self._data_dir / "learning.json",
             enabled=settings.learning_enabled,
             min_history=settings.learning_min_history,
             min_win_rate=settings.learning_min_win_rate,
             min_rule_samples=settings.learning_min_rule_samples,
             min_similarity_samples=settings.learning_min_similarity_samples,
+            exploration_interval=settings.learning_exploration_interval,
         )
         self.learning.rebuild(self.performance.records.values())
         configured_markets = {self._normalize_market_label(market) for market in settings.market_list}
@@ -54,7 +58,7 @@ class MarketEngine:
         self.known_markets: Set[str] = set(configured_markets)
         self.timeframe = settings.default_timeframe
         self.snapshots: Dict[str, AnalysisSnapshot] = {}
-        self._signals_path = BASE_DIR / "data" / "signals.json"
+        self._signals_path = self._data_dir / "signals.json"
         self.signals: List[Signal] = self._load_signal_history()
         if not self.signals:
             self.signals = self._signals_from_performance()
@@ -134,6 +138,7 @@ class MarketEngine:
         return self.state()
 
     def state(self) -> EngineState:
+        signals = self._combined_signal_history(limit=self._api_signal_limit)
         return EngineState(
             connected=self.broker.connected,
             broker_status=self.broker_status,
@@ -141,7 +146,8 @@ class MarketEngine:
             active_markets=sorted(self.active_markets),
             timeframe=self.timeframe,
             snapshots=self.snapshots,
-            signals=self._combined_signal_history(limit=200)[::-1],
+            signals=signals[::-1],
+            signal_history_total=self._signal_history_total(),
             performance=self.performance.summary(),
             learning=self.learning.summary(),
             last_error=self.last_error,
@@ -226,10 +232,10 @@ class MarketEngine:
                     self.performance.register_signal(signal)
                     self._last_signal_at[self._cooldown_key(signal)] = signal.created_at
                     self._emitted_signal_ids.add(signal.id)
-                    self.signals = self.signals[-200:]
+                    self.signals = self._trim_signal_history(self.signals)
                     self._save_signal_history()
                     if len(self._emitted_signal_ids) > 1000:
-                        self._emitted_signal_ids = set(list(self._emitted_signal_ids)[-500:])
+                        self._emitted_signal_ids = {item.id for item in self.signals[-500:]}
                     emit_signal = signal
             if emit_signal is not None:
                 await self.notifier.send_signal(emit_signal)
@@ -268,6 +274,13 @@ class MarketEngine:
         }
         return aliases.get(cleaned, cleaned)
 
+    @staticmethod
+    def _data_path(settings: Settings) -> Path:
+        configured = Path(settings.data_dir).expanduser()
+        if configured.is_absolute():
+            return configured
+        return BASE_DIR / configured
+
     def _load_signal_history(self) -> List[Signal]:
         if not self._signals_path.exists():
             return []
@@ -279,7 +292,7 @@ class MarketEngine:
                 if isinstance(item, dict) and item.get("id")
             ]
             signals.sort(key=lambda signal: signal.created_at)
-            return signals[-200:]
+            return self._trim_signal_history(signals)
         except Exception:
             backup = self._signals_path.with_suffix(f"{self._signals_path.suffix}.bak")
             if not backup.exists():
@@ -292,13 +305,15 @@ class MarketEngine:
                     if isinstance(item, dict) and item.get("id")
                 ]
                 signals.sort(key=lambda signal: signal.created_at)
-                return signals[-200:]
+                return self._trim_signal_history(signals)
             except Exception:
                 return []
 
     def _signals_from_performance(self) -> List[Signal]:
         signals: List[Signal] = []
-        for record in sorted(self.performance.records.values(), key=lambda item: item.created_at)[-200:]:
+        for record in sorted(self.performance.records.values(), key=lambda item: item.created_at)[
+            -self._signal_history_limit :
+        ]:
             signals.append(self._signal_from_record(record))
         if signals:
             self._save_signal_history(signals)
@@ -309,6 +324,15 @@ class MarketEngine:
         for record in self.performance.records.values():
             by_id.setdefault(record.id, self._signal_from_record(record))
         return sorted(by_id.values(), key=lambda signal: signal.created_at)[-limit:]
+
+    def _signal_history_total(self) -> int:
+        return len({signal.id for signal in self.signals} | set(self.performance.records.keys()))
+
+    def _trim_signal_history(self, signals: List[Signal]) -> List[Signal]:
+        by_id: Dict[str, Signal] = {}
+        for signal in sorted(signals, key=lambda item: item.created_at):
+            by_id[signal.id] = signal
+        return sorted(by_id.values(), key=lambda item: item.created_at)[-self._signal_history_limit :]
 
     @staticmethod
     def _signal_from_record(record: SignalOutcome) -> Signal:
@@ -335,7 +359,7 @@ class MarketEngine:
         payload = {
             "signals": [
                 signal.model_dump(mode="json")
-                for signal in sorted(source, key=lambda item: item.created_at)[-200:]
+                for signal in self._trim_signal_history(source)
             ]
         }
         encoded = json.dumps(payload, ensure_ascii=False, indent=2)

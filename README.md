@@ -51,24 +51,32 @@ DEFAULT_TIMEFRAME=60
 POLL_INTERVAL_SECONDS=0.75
 CANDLE_COUNT=80
 SIGNAL_COOLDOWN_SECONDS=45
+DATA_DIR=data
+SIGNAL_HISTORY_LIMIT=1000
+API_SIGNAL_LIMIT=500
 LEARNING_ENABLED=true
 LEARNING_MIN_HISTORY=30
 LEARNING_MIN_WIN_RATE=58
 LEARNING_MIN_RULE_SAMPLES=5
 LEARNING_MIN_SIMILARITY_SAMPLES=4
+LEARNING_EXPLORATION_INTERVAL=20
 ```
 
 Telegram solo envia senales con puntuacion `>= 7`.
 
 El monitor usa stream de velas en tiempo real cuando IQ Option lo permite, y la logica CCI puede alertar sobre la vela en formacion cuando ya hay rechazo/cansancio suficiente.
 
-El historial de alertas se guarda en `data/signals.json`.
+El historial de alertas se guarda en `DATA_DIR/signals.json`. Por defecto `DATA_DIR=data`.
+`SIGNAL_HISTORY_LIMIT` controla cuantas senales se conservan en ese archivo y `API_SIGNAL_LIMIT`
+cuantas se mandan al dashboard en cada actualizacion.
 
-El dashboard de rendimiento guarda las senales emitidas en `data/performance.json` y las evalua
+El dashboard de rendimiento guarda las senales emitidas en `DATA_DIR/performance.json` y las evalua
 despues de la expiracion sugerida para medir ganadas, perdidas, empates, pendientes y acierto por mercado.
 
-El filtro de aprendizaje usa todo `data/performance.json`, guarda su memoria en `data/learning.json`
-y bloquea senales cuando casos historicos parecidos no superan el acierto minimo configurado.
+El filtro de aprendizaje usa todo `DATA_DIR/performance.json`, guarda su memoria en `DATA_DIR/learning.json`
+y bloquea senales cuando casos historicos parecidos no superan el acierto minimo configurado. Para evitar
+que el aprendizaje se quede sin muestras nuevas, `LEARNING_EXPLORATION_INTERVAL` permite una senal fuerte
+de exploracion cada N bloqueos; usa `0` para desactivarlo.
 
 ## CONFIGURACION_MANUAL_REQUERIDA
 

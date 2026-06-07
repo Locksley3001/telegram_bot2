@@ -39,6 +39,7 @@ class SignalLearningSystem:
         min_win_rate: float = 58.0,
         min_rule_samples: int = 5,
         min_similarity_samples: int = 4,
+        exploration_interval: int = 20,
     ) -> None:
         self.path = path
         self.enabled = enabled
@@ -46,6 +47,7 @@ class SignalLearningSystem:
         self.min_win_rate = max(1.0, min(95.0, min_win_rate))
         self.min_rule_samples = max(1, min_rule_samples)
         self.min_similarity_samples = max(1, min_similarity_samples)
+        self.exploration_interval = max(0, exploration_interval)
         self.rules: Dict[str, Dict[str, float]] = {}
         self.resolved_examples = 0
         self.wins = 0
@@ -116,6 +118,10 @@ class SignalLearningSystem:
         if blocking_rule is not None:
             reason = self._format_block_reason(blocking_rule, required_rate)
             decision = LearningDecision(False, self._rule_rate(blocking_rule), int(self._rule_total(blocking_rule)), reason)
+            exploration = self._exploration_decision(signal, decision)
+            if exploration is not None:
+                self._remember_decision(exploration)
+                return exploration
             self._remember_decision(decision)
             return decision
 
@@ -128,6 +134,10 @@ class SignalLearningSystem:
             if strongest is not None:
                 reason += f" Patron principal: {strongest['label']}."
             decision = LearningDecision(False, estimate["rate"], estimate["samples"], reason)
+            exploration = self._exploration_decision(signal, decision)
+            if exploration is not None:
+                self._remember_decision(exploration)
+                return exploration
             self._remember_decision(decision)
             return decision
 
@@ -350,6 +360,21 @@ class SignalLearningSystem:
             self.blocked_signals += 1
         self.last_decision = decision.reason
 
+    def _exploration_decision(self, signal: Signal, blocked: LearningDecision) -> Optional[LearningDecision]:
+        if self.exploration_interval <= 0:
+            return None
+        if signal.score < 8:
+            return None
+        next_blocked_count = self.blocked_signals + 1
+        if next_blocked_count % self.exploration_interval != 0:
+            return None
+        reason = (
+            "Aprendizaje permite exploracion controlada: "
+            f"senal score {signal.score}/10 despues de {next_blocked_count} bloqueos. "
+            f"Motivo original: {blocked.reason}"
+        )
+        return LearningDecision(True, blocked.estimated_win_rate, blocked.evidence_samples, reason)
+
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -363,6 +388,7 @@ class SignalLearningSystem:
             "min_history": self.min_history,
             "min_rule_samples": self.min_rule_samples,
             "min_similarity_samples": self.min_similarity_samples,
+            "exploration_interval": self.exploration_interval,
             "allowed_signals": self.allowed_signals,
             "blocked_signals": self.blocked_signals,
             "last_decision": self.last_decision,

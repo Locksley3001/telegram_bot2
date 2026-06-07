@@ -127,6 +127,7 @@ class EngineState(BaseModel):
     timeframe: int
     snapshots: Dict[str, AnalysisSnapshot]
     signals: List[Signal]
+    signal_history_total: int = 0
     performance: PerformanceSummary = Field(default_factory=PerformanceSummary)
     learning: LearningSummary = Field(default_factory=LearningSummary)
     last_error: Optional[str] = None
