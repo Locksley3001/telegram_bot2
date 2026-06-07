@@ -12,6 +12,7 @@ class PerformanceTracker:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.records: Dict[str, SignalOutcome] = {}
+        self._loaded_ok = True
         self._load()
 
     def register_signal(self, signal: Signal) -> None:
@@ -103,9 +104,26 @@ class PerformanceTracker:
             }
             self._save()
         except Exception:
+            self._loaded_ok = False
+            backup = self.path.with_suffix(f"{self.path.suffix}.bak")
+            if backup.exists():
+                try:
+                    payload = json.loads(backup.read_text(encoding="utf-8"))
+                    records = payload.get("records", [])
+                    self.records = {
+                        record["id"]: self._normalize_record(SignalOutcome.model_validate(record))
+                        for record in records
+                        if isinstance(record, dict) and record.get("id")
+                    }
+                    self._loaded_ok = True
+                    return
+                except Exception:
+                    pass
             self.records = {}
 
     def _save(self) -> None:
+        if not self._loaded_ok and self.path.exists():
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "records": [
@@ -113,7 +131,13 @@ class PerformanceTracker:
                 for record in sorted(self.records.values(), key=lambda item: item.created_at)
             ]
         }
-        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
+        temp_path = self.path.with_suffix(f"{self.path.suffix}.tmp")
+        backup_path = self.path.with_suffix(f"{self.path.suffix}.bak")
+        temp_path.write_text(encoded, encoding="utf-8")
+        if self.path.exists():
+            backup_path.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
+        temp_path.replace(self.path)
 
     @staticmethod
     def _result_candle(record: SignalOutcome, candles: List[Candle]) -> Candle | None:

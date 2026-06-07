@@ -1986,13 +1986,13 @@
       "exhaustion": 5.3,
       "cci": -138.5,
       "entry_price": 158.75505,
-      "result_price": 158.78875,
-      "status": "win",
+      "result_price": null,
+      "status": "pending",
       "timeframe": 60,
       "suggested_expiration": 120,
       "created_at": "2026-06-07T15:14:19.221799Z",
       "expires_at": "2026-06-07T15:16:19.221799Z",
-      "resolved_at": "2026-06-07T15:18:00.320537Z",
+      "resolved_at": null,
       "main_reason": "CCI(20) en sobreventa extrema (-138.5) con vela de cansancio y rechazo (en formacion 32%); entrada contra mercado CALL"
     },
     {

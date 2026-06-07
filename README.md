@@ -57,6 +57,8 @@ Telegram solo envia senales con puntuacion `>= 7`.
 
 El monitor usa stream de velas en tiempo real cuando IQ Option lo permite, y la logica CCI puede alertar sobre la vela en formacion cuando ya hay rechazo/cansancio suficiente.
 
+El historial de alertas se guarda en `data/signals.json`.
+
 El dashboard de rendimiento guarda las senales emitidas en `data/performance.json` y las evalua
 despues de la expiracion sugerida para medir ganadas, perdidas, empates, pendientes y acierto por mercado.
 

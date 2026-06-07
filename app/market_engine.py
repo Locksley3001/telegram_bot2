@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,11 +40,15 @@ class MarketEngine:
         self.known_markets: Set[str] = set(configured_markets)
         self.timeframe = settings.default_timeframe
         self.snapshots: Dict[str, AnalysisSnapshot] = {}
-        self.signals: List[Signal] = []
+        self._signals_path = BASE_DIR / "data" / "signals.json"
+        self.signals: List[Signal] = self._load_signal_history()
+        if not self.signals:
+            self.signals = self._signals_from_performance()
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
-        self._emitted_signal_ids: Set[str] = set()
+        self._emitted_signal_ids: Set[str] = {signal.id for signal in self.signals}
+        self._restore_signal_cooldowns()
         self._task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._clients: Set[WebSocket] = set()
@@ -190,6 +195,7 @@ class MarketEngine:
                     self._last_signal_at[self._cooldown_key(signal)] = signal.created_at
                     self._emitted_signal_ids.add(signal.id)
                     self.signals = self.signals[-200:]
+                    self._save_signal_history()
                     if len(self._emitted_signal_ids) > 1000:
                         self._emitted_signal_ids = set(list(self._emitted_signal_ids)[-500:])
                     emit_signal = signal
@@ -229,6 +235,83 @@ class MarketEngine:
             "NVDA/AMD-OTC": "NVDA/AMD-OTC",
         }
         return aliases.get(cleaned, cleaned)
+
+    def _load_signal_history(self) -> List[Signal]:
+        if not self._signals_path.exists():
+            return []
+        try:
+            payload = json.loads(self._signals_path.read_text(encoding="utf-8"))
+            signals = [
+                Signal.model_validate(item)
+                for item in payload.get("signals", [])
+                if isinstance(item, dict) and item.get("id")
+            ]
+            signals.sort(key=lambda signal: signal.created_at)
+            return signals[-200:]
+        except Exception:
+            backup = self._signals_path.with_suffix(f"{self._signals_path.suffix}.bak")
+            if not backup.exists():
+                return []
+            try:
+                payload = json.loads(backup.read_text(encoding="utf-8"))
+                signals = [
+                    Signal.model_validate(item)
+                    for item in payload.get("signals", [])
+                    if isinstance(item, dict) and item.get("id")
+                ]
+                signals.sort(key=lambda signal: signal.created_at)
+                return signals[-200:]
+            except Exception:
+                return []
+
+    def _signals_from_performance(self) -> List[Signal]:
+        signals: List[Signal] = []
+        for record in sorted(self.performance.records.values(), key=lambda item: item.created_at)[-200:]:
+            signals.append(
+                Signal(
+                    id=record.id,
+                    asset=record.asset,
+                    direction=record.direction,
+                    score=record.score,
+                    grade="strong" if record.score >= 8 else "valid",
+                    strength=record.strength,
+                    continuity=record.continuity,
+                    exhaustion=record.exhaustion,
+                    cci=record.cci,
+                    main_reason=record.main_reason,
+                    suggested_expiration=record.suggested_expiration,
+                    created_at=record.created_at,
+                    price=record.entry_price,
+                    timeframe=record.timeframe,
+                )
+            )
+        if signals:
+            self._save_signal_history(signals)
+        return signals
+
+    def _save_signal_history(self, signals: Optional[List[Signal]] = None) -> None:
+        self._signals_path.parent.mkdir(parents=True, exist_ok=True)
+        source = signals if signals is not None else self.signals
+        payload = {
+            "signals": [
+                signal.model_dump(mode="json")
+                for signal in sorted(source, key=lambda item: item.created_at)[-200:]
+            ]
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
+        temp_path = self._signals_path.with_suffix(f"{self._signals_path.suffix}.tmp")
+        backup_path = self._signals_path.with_suffix(f"{self._signals_path.suffix}.bak")
+        temp_path.write_text(encoded, encoding="utf-8")
+        if self._signals_path.exists():
+            backup_path.write_text(self._signals_path.read_text(encoding="utf-8"), encoding="utf-8")
+        temp_path.replace(self._signals_path)
+
+    def _restore_signal_cooldowns(self) -> None:
+        for signal in self.signals[-80:]:
+            key = self._cooldown_key(signal)
+            previous = self._last_signal_at.get(key)
+            if previous is None or signal.created_at > previous:
+                self._last_signal_at[key] = signal.created_at
 
     async def _broadcast(self) -> None:
         if not self._clients:
