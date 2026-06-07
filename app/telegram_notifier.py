@@ -12,6 +12,7 @@ from telegram import Bot
 from app.models import Signal, SignalOutcome
 
 LOGGER = logging.getLogger(__name__)
+SUMMARY_BATCH_SIZE = 5
 
 
 class TelegramNotifier:
@@ -85,8 +86,6 @@ class TelegramNotifier:
             return
         if record.id in self._result_sent_ids:
             return
-        if record.id not in self._sent_ids:
-            return
         if record.status == "pending":
             return
 
@@ -134,18 +133,18 @@ class TelegramNotifier:
     async def _send_due_summaries(self) -> None:
         if self._bot is None:
             return
-        while len(self._summary_pending) >= 10:
-            batch = self._summary_pending[:10]
+        while len(self._summary_pending) >= SUMMARY_BATCH_SIZE:
+            batch = self._summary_pending[:SUMMARY_BATCH_SIZE]
             text = self._summary_text(batch, self._summaries_sent + 1)
             try:
                 await self._send_message(chat_id=self.chat_id, text=text)
                 self._summaries_sent += 1
-                self._summary_pending = self._summary_pending[10:]
+                self._summary_pending = self._summary_pending[SUMMARY_BATCH_SIZE:]
                 self._save_state()
                 self.last_error = None
             except Exception:
-                self.last_error = "No se pudo enviar el resumen de 10 operaciones por Telegram."
-                LOGGER.exception("No se pudo enviar el resumen de 10 operaciones por Telegram")
+                self.last_error = "No se pudo enviar el resumen de 5 operaciones por Telegram."
+                LOGGER.exception("No se pudo enviar el resumen de 5 operaciones por Telegram")
                 return
 
     @staticmethod
@@ -171,7 +170,7 @@ class TelegramNotifier:
         losses = sum(1 for item in batch if item.get("status") == "loss")
         pushes = sum(1 for item in batch if item.get("status") == "push")
         lines = [
-            f"RESUMEN CADA 10 OPERACIONES #{batch_number}",
+            f"RESUMEN CADA 5 OPERACIONES #{batch_number}",
             f"Ganadas: {wins}",
             f"Perdidas: {losses}",
             f"Empates: {pushes}",
@@ -180,7 +179,7 @@ class TelegramNotifier:
         for index, item in enumerate(batch, start=1):
             label = TelegramNotifier._status_label(str(item.get("status", "")))
             lines.append(
-                f"{index}. {label} | {item.get('asset')} {item.get('direction')} "
+                f"Operacion {index}: {label} | {item.get('asset')} {item.get('direction')} "
                 f"score {item.get('score')}/10"
             )
         return "\n".join(lines)

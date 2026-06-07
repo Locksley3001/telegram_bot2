@@ -135,12 +135,20 @@ function ensureSelectedAsset() {
 
 function render() {
   if (!state.data) return;
-  renderStatus();
-  renderTimeframes();
-  renderMarkets();
-  renderSnapshot();
-  renderSignals();
-  renderDashboard();
+  safeRender(renderStatus);
+  safeRender(renderTimeframes);
+  safeRender(renderMarkets);
+  safeRender(renderSnapshot);
+  safeRender(renderSignals);
+  safeRender(renderDashboard);
+}
+
+function safeRender(fn) {
+  try {
+    fn();
+  } catch (error) {
+    console.error(`Render failed in ${fn.name}`, error);
+  }
 }
 
 function renderStatus() {
@@ -291,6 +299,7 @@ function renderSignals() {
 }
 
 function renderDashboard() {
+  if (!els.perfTotal) return;
   const perf = state.data.performance || {};
   els.perfTotal.textContent = String(perf.total || 0);
   els.perfWinRate.textContent = `${Number(perf.win_rate || 0).toFixed(1)}%`;
@@ -305,6 +314,7 @@ function renderDashboard() {
 }
 
 function renderLearning(learning) {
+  if (!els.learningExamples || !els.learningPatterns) return;
   els.learningExamples.textContent = String(learning.resolved_examples || 0);
   els.learningMinRate.textContent = `${Number(learning.min_win_rate || 0).toFixed(1)}%`;
   els.learningBlocked.textContent = String(learning.blocked_signals || 0);

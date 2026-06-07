@@ -325,7 +325,7 @@ class PriceActionAnalyzer:
     def _suggest_expiration(timeframe: int, score: float, pattern: str) -> int:
         allowed = [30, 45, 60, 120, 180, 300]
         if pattern in {"cci_reversal", "cci_reversal_live"}:
-            target = 120 if timeframe <= 60 else min(300, timeframe)
+            target = 60 if timeframe <= 60 else min(300, timeframe)
         elif score >= 8:
             target = timeframe if timeframe in allowed else 60
         else:
