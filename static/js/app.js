@@ -1,9 +1,11 @@
 const state = {
   data: null,
   selectedAsset: null,
+  currentView: "chart",
   socket: null,
   audioContext: null,
   audioEnabled: false,
+  chartSize: { width: 0, height: 0, dpr: 1 },
   _knownSignalIds: new Set(),
 };
 
@@ -17,6 +19,9 @@ const els = {
   telegramTestButton: document.getElementById("telegramTestButton"),
   soundTestButton: document.getElementById("soundTestButton"),
   testFeedback: document.getElementById("testFeedback"),
+  viewTabs: document.getElementById("viewTabs"),
+  chartView: document.getElementById("chartView"),
+  dashboardView: document.getElementById("dashboardView"),
   timeframeRow: document.getElementById("timeframeRow"),
   selectedAsset: document.getElementById("selectedAsset"),
   edgeStatus: document.getElementById("edgeStatus"),
@@ -25,9 +30,19 @@ const els = {
   strengthValue: document.getElementById("strengthValue"),
   continuityValue: document.getElementById("continuityValue"),
   exhaustionValue: document.getElementById("exhaustionValue"),
+  cciValue: document.getElementById("cciValue"),
   timeframeValue: document.getElementById("timeframeValue"),
   signalsList: document.getElementById("signalsList"),
   signalCount: document.getElementById("signalCount"),
+  perfTotal: document.getElementById("perfTotal"),
+  perfWinRate: document.getElementById("perfWinRate"),
+  perfWins: document.getElementById("perfWins"),
+  perfLosses: document.getElementById("perfLosses"),
+  perfPending: document.getElementById("perfPending"),
+  perfAvgScore: document.getElementById("perfAvgScore"),
+  marketStats: document.getElementById("marketStats"),
+  directionStats: document.getElementById("directionStats"),
+  resultList: document.getElementById("resultList"),
 };
 
 const timeframeLabels = new Map([
@@ -61,7 +76,7 @@ async function api(path, options = {}) {
     ...options,
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await responseErrorText(response));
   }
   state.data = await response.json();
   ensureSelectedAsset();
@@ -74,9 +89,19 @@ async function apiRequest(path, options = {}) {
     ...options,
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await responseErrorText(response));
   }
   return await response.json();
+}
+
+async function responseErrorText(response) {
+  const text = await response.text();
+  try {
+    const payload = JSON.parse(text);
+    return payload.detail || payload.message || text;
+  } catch (error) {
+    return text || `HTTP ${response.status}`;
+  }
 }
 
 function ensureSelectedAsset() {
@@ -97,6 +122,7 @@ function render() {
   renderMarkets();
   renderSnapshot();
   renderSignals();
+  renderDashboard();
 }
 
 function renderStatus() {
@@ -136,6 +162,8 @@ function renderMarkets() {
     name.textContent = asset;
     name.addEventListener("click", () => {
       state.selectedAsset = asset;
+      state.currentView = "chart";
+      renderView();
       render();
     });
     const meta = document.createElement("div");
@@ -162,7 +190,7 @@ function renderMarkets() {
     remove.className = "market-remove";
     remove.type = "button";
     remove.title = "Eliminar mercado";
-    remove.textContent = "×";
+    remove.textContent = "x";
     remove.addEventListener("click", () => {
       api(`/api/markets/${encodeURIComponent(asset)}`, { method: "DELETE" });
     });
@@ -177,12 +205,15 @@ function renderSnapshot() {
   els.selectedAsset.textContent = state.selectedAsset || "-";
 
   if (!snapshot) {
-    els.edgeStatus.textContent = "MERCADO SIN VENTAJA ESTADÍSTICA";
+    els.edgeStatus.textContent = "MERCADO SIN VENTAJA ESTADISTICA";
     els.edgeStatus.classList.remove("edge");
     els.strengthValue.textContent = "0.0";
     els.continuityValue.textContent = "0.0";
     els.exhaustionValue.textContent = "0.0";
-    drawChart([], [], null);
+    els.cciValue.textContent = "0.0";
+    if (state.currentView === "chart") {
+      drawChart([], [], null);
+    }
     return;
   }
 
@@ -194,7 +225,10 @@ function renderSnapshot() {
   els.strengthValue.textContent = Number(snapshot.strength || 0).toFixed(1);
   els.continuityValue.textContent = Number(snapshot.continuity || 0).toFixed(1);
   els.exhaustionValue.textContent = Number(snapshot.exhaustion || 0).toFixed(1);
-  drawChart(snapshot.candles || [], snapshot.zones || [], snapshot.signal || null);
+  els.cciValue.textContent = Number(snapshot.cci || 0).toFixed(1);
+  if (state.currentView === "chart") {
+    drawChart(snapshot.candles || [], snapshot.zones || [], snapshot.signal || null);
+  }
 }
 
 function renderSignals() {
@@ -223,16 +257,116 @@ function renderSignals() {
         <span><strong>Expiración:</strong> ${signal.suggested_expiration}s</span>
         <span><strong>Fuerza:</strong> ${Number(signal.strength).toFixed(1)} · <strong>Continuidad:</strong> ${Number(signal.continuity).toFixed(1)}</span>
         <span><strong>Cansancio:</strong> ${Number(signal.exhaustion).toFixed(1)}</span>
+        <span><strong>CCI(20):</strong> ${Number(signal.cci || 0).toFixed(1)}</span>
         <span>${signal.main_reason}</span>
         <span class="signal-time">${time}</span>
       </div>
     `;
     item.addEventListener("click", () => {
       state.selectedAsset = signal.asset;
+      state.currentView = "chart";
+      renderView();
       render();
     });
     els.signalsList.appendChild(item);
   });
+}
+
+function renderDashboard() {
+  const perf = state.data.performance || {};
+  els.perfTotal.textContent = String(perf.total || 0);
+  els.perfWinRate.textContent = `${Number(perf.win_rate || 0).toFixed(1)}%`;
+  els.perfWins.textContent = String(perf.wins || 0);
+  els.perfLosses.textContent = String(perf.losses || 0);
+  els.perfPending.textContent = String(perf.pending || 0);
+  els.perfAvgScore.textContent = Number(perf.avg_score || 0).toFixed(1);
+  renderBuckets(els.marketStats, perf.by_market || [], "Sin operaciones evaluadas por mercado");
+  renderBuckets(els.directionStats, perf.by_direction || [], "Sin operaciones evaluadas por dirección");
+  renderResults(perf.recent_results || []);
+}
+
+function renderBuckets(container, buckets, emptyText) {
+  container.innerHTML = "";
+  if (!buckets.length) {
+    const empty = document.createElement("p");
+    empty.className = "market-meta";
+    empty.textContent = emptyText;
+    container.appendChild(empty);
+    return;
+  }
+
+  buckets.forEach((bucket) => {
+    const row = document.createElement("article");
+    row.className = "stats-row";
+    const winRate = Number(bucket.win_rate || 0);
+    row.innerHTML = `
+      <div class="stats-head">
+        <span>${bucket.name}</span>
+        <strong>${winRate.toFixed(1)}%</strong>
+      </div>
+      <div class="stats-bar"><span style="width: ${Math.max(0, Math.min(100, winRate))}%"></span></div>
+      <div class="stats-meta">
+        ${bucket.wins || 0}G · ${bucket.losses || 0}P · ${bucket.pushes || 0}E · ${bucket.pending || 0} pendientes
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function renderResults(results) {
+  els.resultList.innerHTML = "";
+  if (!results.length) {
+    const empty = document.createElement("p");
+    empty.className = "market-meta";
+    empty.textContent = "Aun no hay señales registradas para evaluar.";
+    els.resultList.appendChild(empty);
+    return;
+  }
+
+  results.forEach((result) => {
+    const row = document.createElement("article");
+    row.className = `result-row ${result.status}`;
+    const created = new Date(result.created_at).toLocaleTimeString();
+    const entry = Number(result.entry_price || 0);
+    const exit = result.result_price == null ? null : Number(result.result_price);
+    row.innerHTML = `
+      <div class="result-head">
+        <span>${result.direction} · ${result.asset}</span>
+        <span class="result-status">${statusLabel(result.status)}</span>
+      </div>
+      <div class="result-meta">
+        ${created} · score ${result.score}/10 · CCI ${Number(result.cci || 0).toFixed(1)}
+      </div>
+      <div class="result-meta">
+        Entrada ${formatPrice(entry)} · Salida ${exit == null ? "-" : formatPrice(exit)}
+      </div>
+    `;
+    els.resultList.appendChild(row);
+  });
+}
+
+function statusLabel(status) {
+  if (status === "win") return "GANADA";
+  if (status === "loss") return "PERDIDA";
+  if (status === "push") return "EMPATE";
+  return "PENDIENTE";
+}
+
+function formatPrice(value) {
+  if (!Number.isFinite(value)) return "-";
+  return value > 10 ? value.toFixed(4) : value.toFixed(6);
+}
+
+function renderView() {
+  const chartActive = state.currentView === "chart";
+  els.chartView.classList.toggle("hidden", !chartActive);
+  els.dashboardView.classList.toggle("hidden", chartActive);
+  els.viewTabs.querySelectorAll("button[data-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === state.currentView);
+  });
+  if (chartActive) {
+    state.chartSize = { width: 0, height: 0, dpr: 1 };
+  }
 }
 
 function drawChart(candles, zones, signal) {
@@ -240,22 +374,31 @@ function drawChart(candles, zones, signal) {
   const parent = canvas.parentElement;
   const rect = parent.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-  canvas.style.width = `${rect.width}px`;
-  canvas.style.height = `${rect.height}px`;
+  const cssWidth = Math.max(1, Math.floor(rect.width));
+  const cssHeight = Math.max(1, Math.floor(rect.height));
+  if (
+    state.chartSize.width !== cssWidth ||
+    state.chartSize.height !== cssHeight ||
+    state.chartSize.dpr !== dpr
+  ) {
+    canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+    canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    state.chartSize = { width: cssWidth, height: cssHeight, dpr };
+  }
 
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   const data = candles.slice(-70);
   els.emptyChart.classList.toggle("visible", data.length < 4);
   if (data.length < 4) return;
 
   const pad = { top: 24, right: 58, bottom: 28, left: 18 };
-  const width = rect.width - pad.left - pad.right;
-  const height = rect.height - pad.top - pad.bottom;
+  const width = cssWidth - pad.left - pad.right;
+  const height = cssHeight - pad.top - pad.bottom;
   const highs = data.map((candle) => Number(candle.high));
   const lows = data.map((candle) => Number(candle.low));
   let max = Math.max(...highs);
@@ -270,9 +413,9 @@ function drawChart(candles, zones, signal) {
 
   const y = (price) => pad.top + ((max - price) / (max - min)) * height;
   const x = (index) => pad.left + (index / Math.max(data.length - 1, 1)) * width;
-  const candleWidth = Math.max(4, Math.min(12, width / data.length * 0.58));
+  const candleWidth = Math.max(4, Math.min(12, (width / data.length) * 0.58));
 
-  drawGrid(ctx, rect, pad, min, max, y);
+  drawGrid(ctx, { width: cssWidth, height: cssHeight }, pad, min, max, y);
   drawZones(ctx, zones, y, pad.left, width);
 
   data.forEach((candle, index) => {
@@ -331,7 +474,9 @@ function drawZones(ctx, zones, y, left, width) {
 }
 
 function drawSignal(ctx, signal, data, x, y) {
-  const index = data.findIndex((candle) => Math.floor(candle.timestamp) === Math.floor(new Date(signal.created_at).getTime() / 1000));
+  const index = data.findIndex(
+    (candle) => Math.floor(candle.timestamp) === Math.floor(new Date(signal.created_at).getTime() / 1000),
+  );
   const lastIndex = index >= 0 ? index : data.length - 1;
   const px = x(lastIndex);
   const py = y(Number(signal.price));
@@ -363,6 +508,14 @@ els.marketSearch.addEventListener("input", renderMarkets);
 els.telegramTestButton.addEventListener("click", testTelegram);
 els.soundTestButton.addEventListener("click", testSound);
 
+els.viewTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-view]");
+  if (!button) return;
+  state.currentView = button.dataset.view;
+  renderView();
+  render();
+});
+
 els.timeframeRow.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-timeframe]");
   if (!button) return;
@@ -372,7 +525,17 @@ els.timeframeRow.addEventListener("click", (event) => {
   });
 });
 
+document.addEventListener(
+  "pointerdown",
+  () => {
+    state.audioEnabled = true;
+    ensureAudioContext().catch(() => {});
+  },
+  { once: true },
+);
+
 window.addEventListener("resize", () => renderSnapshot());
+renderView();
 connectSocket();
 
 async function detectNewSignalsAndNotify(signals) {
@@ -384,7 +547,7 @@ async function detectNewSignalsAndNotify(signals) {
       await playNotification();
     }
   } catch (e) {
-    // ignore
+    // ignore notification failures
   }
 }
 
@@ -394,28 +557,40 @@ async function playNotification(force = false) {
   }
   try {
     const ctx = await ensureAudioContext();
-    if (!ctx) return;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = 880;
-    g.gain.value = 0.02;
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start();
-    setTimeout(() => {
-      o.stop();
-    }, 140);
+    if (!ctx || ctx.state !== "running") {
+      throw new Error("Audio no disponible");
+    }
+    await playTone(ctx, 880, 0.16, 0.08);
+    await playTone(ctx, 1180, 0.18, 0.09);
   } catch (e) {
     try {
-      const a = new Audio();
-      a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
-      a.volume = 0.1;
-      a.play().catch(() => {});
-    } catch (e) {
-      // ignore
+      const audio = new Audio();
+      audio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
+      audio.volume = 0.35;
+      await Promise.race([audio.play(), new Promise((resolve) => setTimeout(resolve, 300))]);
+    } catch (error) {
+      // browser blocked fallback audio
     }
   }
+}
+
+function playTone(ctx, frequency, duration, volume) {
+  return new Promise((resolve) => {
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.addEventListener("ended", resolve, { once: true });
+    oscillator.start(now);
+    oscillator.stop(now + duration + 0.02);
+    setTimeout(resolve, (duration + 0.08) * 1000);
+  });
 }
 
 async function ensureAudioContext() {
@@ -426,26 +601,34 @@ async function ensureAudioContext() {
   }
   if (state.audioContext.state === "suspended") {
     try {
-      await state.audioContext.resume();
+      await Promise.race([
+        state.audioContext.resume(),
+        new Promise((resolve) => setTimeout(resolve, 300)),
+      ]);
     } catch (e) {
       // user gesture required
     }
   }
-  return state.audioContext;
+  return state.audioContext.state === "running" ? state.audioContext : null;
 }
 
 async function testSound() {
+  els.soundTestButton.disabled = true;
+  setTestFeedback("Probando sonido...", false);
   try {
     state.audioEnabled = true;
-    await ensureAudioContext();
     await playNotification(true);
     setTestFeedback("Sonido de prueba enviado.", false);
   } catch (error) {
     setTestFeedback("No se pudo reproducir sonido. Usa el boton otra vez.", true);
+  } finally {
+    els.soundTestButton.disabled = false;
   }
 }
 
 async function testTelegram() {
+  els.telegramTestButton.disabled = true;
+  setTestFeedback("Enviando prueba de Telegram...", false);
   try {
     const response = await apiRequest("/api/telegram/test", { method: "POST" });
     if (response?.sent) {
@@ -454,7 +637,9 @@ async function testTelegram() {
       setTestFeedback("No se recibio respuesta de Telegram.", true);
     }
   } catch (error) {
-    setTestFeedback(`Error Telegram: ${String(error)}`, true);
+    setTestFeedback(`Error Telegram: ${error.message || String(error)}`, true);
+  } finally {
+    els.telegramTestButton.disabled = false;
   }
 }
 

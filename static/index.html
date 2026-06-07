@@ -24,7 +24,7 @@
         </div>
 
         <form id="addMarketForm" class="add-row">
-          <input id="marketInput" type="text" placeholder="AUDCAD-OTC" autocomplete="off" />
+          <input id="marketInput" type="text" placeholder="BTC/USD-OTC" autocomplete="off" />
           <button type="submit" title="Agregar mercado">+</button>
         </form>
 
@@ -46,19 +46,77 @@
             <p class="eyebrow">Activo</p>
             <h2 id="selectedAsset">-</h2>
           </div>
-          <div class="status-pill" id="edgeStatus">MERCADO SIN VENTAJA ESTADÍSTICA</div>
+          <div class="status-pill" id="edgeStatus">MERCADO SIN VENTAJA ESTADISTICA</div>
         </header>
 
         <div class="chart-actions">
+          <div class="view-tabs" id="viewTabs" aria-label="Vistas">
+            <button class="active" data-view="chart" type="button">Grafico</button>
+            <button data-view="dashboard" type="button">Dashboard</button>
+          </div>
           <button id="telegramTestButton" type="button">Probar Telegram</button>
           <button id="soundTestButton" type="button">Probar sonido</button>
           <span id="testFeedback" class="test-feedback"></span>
         </div>
 
-        <div class="chart-wrap">
-          <canvas id="priceChart"></canvas>
-          <div class="empty-chart" id="emptyChart">Esperando velas reales de IQ Option</div>
+        <div class="chart-view" id="chartView">
+          <div class="chart-wrap">
+            <canvas id="priceChart"></canvas>
+            <div class="empty-chart" id="emptyChart">Esperando velas reales de IQ Option</div>
+          </div>
         </div>
+
+        <section class="dashboard-view hidden" id="dashboardView">
+          <div class="dashboard-grid">
+            <article class="stat-tile">
+              <span>Total</span>
+              <strong id="perfTotal">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Acierto</span>
+              <strong id="perfWinRate">0%</strong>
+            </article>
+            <article class="stat-tile win">
+              <span>Ganadas</span>
+              <strong id="perfWins">0</strong>
+            </article>
+            <article class="stat-tile loss">
+              <span>Perdidas</span>
+              <strong id="perfLosses">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Pendientes</span>
+              <strong id="perfPending">0</strong>
+            </article>
+            <article class="stat-tile">
+              <span>Score medio</span>
+              <strong id="perfAvgScore">0.0</strong>
+            </article>
+          </div>
+
+          <div class="dashboard-columns">
+            <section class="dashboard-section">
+              <header>
+                <h3>Mercados</h3>
+              </header>
+              <div id="marketStats" class="stats-list"></div>
+            </section>
+
+            <section class="dashboard-section">
+              <header>
+                <h3>Direccion</h3>
+              </header>
+              <div id="directionStats" class="stats-list"></div>
+            </section>
+          </div>
+
+          <section class="dashboard-section results-section">
+            <header>
+              <h3>Resultados recientes</h3>
+            </header>
+            <div id="resultList" class="result-list"></div>
+          </section>
+        </section>
 
         <section class="metrics-row">
           <div class="metric">
@@ -72,6 +130,10 @@
           <div class="metric">
             <span>Cansancio</span>
             <strong id="exhaustionValue">0.0</strong>
+          </div>
+          <div class="metric">
+            <span>CCI(20)</span>
+            <strong id="cciValue">0.0</strong>
           </div>
           <div class="metric">
             <span>Timeframe</span>

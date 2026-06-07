@@ -17,6 +17,7 @@ class TelegramNotifier:
         self.chat_id = chat_id
         self._bot: Optional[Bot] = Bot(token=token) if token and chat_id else None
         self._sent_ids: Set[str] = set()
+        self.last_error: Optional[str] = None
 
     @property
     def enabled(self) -> bool:
@@ -34,6 +35,7 @@ class TelegramNotifier:
             f"Fuerza: {signal.strength:.1f}/10\n"
             f"Continuidad: {signal.continuity:.1f}/10\n"
             f"Cansancio: {signal.exhaustion:.1f}/10\n"
+            f"CCI(20): {signal.cci:.1f}\n"
             f"Razon principal: {signal.main_reason}\n"
             f"Expiracion sugerida: {signal.suggested_expiration}s\n"
             f"Hora exacta: {signal.created_at.astimezone().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -42,7 +44,9 @@ class TelegramNotifier:
         try:
             await self._send_message(chat_id=self.chat_id, text=text)
             self._sent_ids.add(signal.id)
+            self.last_error = None
         except Exception:
+            self.last_error = "No se pudo enviar la senal por Telegram."
             LOGGER.exception("No se pudo enviar la senal por Telegram")
 
     async def send_test(self) -> bool:
@@ -57,8 +61,10 @@ class TelegramNotifier:
                     "Este mensaje no es una senal de mercado."
                 ),
             )
+            self.last_error = None
             return True
-        except Exception:
+        except Exception as exc:
+            self.last_error = str(exc) or "No se pudo enviar el test por Telegram."
             LOGGER.exception("No se pudo enviar el test por Telegram")
             return False
 

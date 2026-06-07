@@ -80,6 +80,13 @@ class IQOptionBroker(BrokerInterface):
                 except Exception:
                     LOGGER.exception("No se pudo seleccionar balance %s", self.balance_mode)
 
+            update_actives = getattr(client, "update_ACTIVES_OPCODE", None)
+            if callable(update_actives):
+                try:
+                    update_actives()
+                except Exception:
+                    LOGGER.exception("No se pudo actualizar la tabla de activos de IQ Option")
+
             self._client = client
 
         await asyncio.to_thread(_connect)
@@ -221,10 +228,26 @@ class IQOptionBroker(BrokerInterface):
 
     @staticmethod
     def _normalize_asset_name(asset: str) -> str:
-        cleaned = asset.strip().replace("/", "").replace(" ", "")
+        cleaned = asset.strip().replace(" ", "").replace("_", "-")
         if cleaned.lower().endswith("_otc"):
             cleaned = f"{cleaned[:-4]}-OTC"
-        return cleaned.upper()
+        upper = cleaned.upper()
+        aliases = {
+            "BTC/USD-OTC": "BTCUSD-OTC-op",
+            "BTCUSD-OTC": "BTCUSD-OTC-op",
+            "BTCUSDOTC": "BTCUSD-OTC-op",
+            "BTCUSD-OTC-OP": "BTCUSD-OTC-op",
+            "ETH/USD-OTC": "ETHUSD-OTC",
+            "ETHUSDOTC": "ETHUSD-OTC",
+            "SOL/USD-OTC": "SOLUSD-OTC",
+            "SOLUSDOTC": "SOLUSD-OTC",
+            "NVDAAMD-OTC": "NVDA/AMD-OTC",
+            "NVDA/AMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIAAMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA/AMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA-AMD-OTC": "NVDA/AMD-OTC",
+        }
+        return aliases.get(upper, upper)
 
     @staticmethod
     def _get_value(raw: Any, names: Iterable[str], default: Any = None) -> Any:
@@ -259,4 +282,3 @@ class IQOptionBroker(BrokerInterface):
             volume=float(cls._get_value(raw, ("volume", "v"), 0) or 0),
             is_closed=is_closed,
         )
-

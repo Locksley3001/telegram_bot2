@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from fastapi import WebSocket
@@ -11,10 +12,12 @@ from app.analysis import NO_EDGE_MESSAGE, PriceActionAnalyzer
 from app.config import Settings
 from app.iq_option_broker import IQOptionBroker
 from app.models import AnalysisSnapshot, EngineState, Signal, utc_now
+from app.performance_tracker import PerformanceTracker
 from app.telegram_notifier import TelegramNotifier
 
 LOGGER = logging.getLogger(__name__)
 ALLOWED_TIMEFRAMES = {30, 45, 60, 120, 180, 300}
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class MarketEngine:
@@ -29,8 +32,11 @@ class MarketEngine:
         )
         self.notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
         self.analyzer = PriceActionAnalyzer()
-        self.active_markets: Set[str] = set(settings.market_list)
-        self.known_markets: Set[str] = set(settings.market_list)
+        self.performance = PerformanceTracker(BASE_DIR / "data" / "performance.json")
+        configured_markets = {self._normalize_market_label(market) for market in settings.market_list}
+        configured_markets.discard("")
+        self.active_markets: Set[str] = set(configured_markets)
+        self.known_markets: Set[str] = set(configured_markets)
         self.timeframe = settings.default_timeframe
         self.snapshots: Dict[str, AnalysisSnapshot] = {}
         self.signals: List[Signal] = []
@@ -66,7 +72,7 @@ class MarketEngine:
         self._clients.discard(websocket)
 
     async def add_market(self, asset: str) -> EngineState:
-        cleaned = asset.strip()
+        cleaned = self._normalize_market_label(asset)
         if cleaned:
             async with self._lock:
                 self.known_markets.add(cleaned)
@@ -75,20 +81,22 @@ class MarketEngine:
         return self.state()
 
     async def remove_market(self, asset: str) -> EngineState:
+        cleaned = self._normalize_market_label(asset)
         async with self._lock:
-            self.known_markets.discard(asset)
-            self.active_markets.discard(asset)
-            self.snapshots.pop(asset, None)
+            self.known_markets.discard(cleaned)
+            self.active_markets.discard(cleaned)
+            self.snapshots.pop(cleaned, None)
         await self._broadcast()
         return self.state()
 
     async def set_market_enabled(self, asset: str, enabled: bool) -> EngineState:
+        cleaned = self._normalize_market_label(asset)
         async with self._lock:
-            self.known_markets.add(asset)
+            self.known_markets.add(cleaned)
             if enabled:
-                self.active_markets.add(asset)
+                self.active_markets.add(cleaned)
             else:
-                self.active_markets.discard(asset)
+                self.active_markets.discard(cleaned)
         await self._broadcast()
         return self.state()
 
@@ -110,6 +118,7 @@ class MarketEngine:
             timeframe=self.timeframe,
             snapshots=self.snapshots,
             signals=self.signals[-80:][::-1],
+            performance=self.performance.summary(),
             last_error=self.last_error,
         )
 
@@ -153,6 +162,7 @@ class MarketEngine:
     async def _analyze_market(self, asset: str) -> None:
         try:
             candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
+            self.performance.evaluate(asset, candles)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
             snapshot = AnalysisSnapshot(
                 asset=asset,
@@ -164,6 +174,7 @@ class MarketEngine:
                 strength=context.get("strength", 1.0),
                 continuity=context.get("continuity", 1.0),
                 exhaustion=context.get("exhaustion", 1.0),
+                cci=context.get("cci", 0.0),
                 updated_at=utc_now(),
             )
 
@@ -172,6 +183,7 @@ class MarketEngine:
                 self.snapshots[asset] = snapshot
                 if signal is not None and self._can_emit(signal):
                     self.signals.append(signal)
+                    self.performance.register_signal(signal)
                     self._last_signal_at[self._cooldown_key(signal)] = signal.created_at
                     self.signals = self.signals[-200:]
                     emit_signal = signal
@@ -182,7 +194,7 @@ class MarketEngine:
             LOGGER.exception("Fallo analizando %s", asset)
 
     def _can_emit(self, signal: Signal) -> bool:
-        if signal.score < 6:
+        if signal.score < 7:
             return False
         previous = self._last_signal_at.get(self._cooldown_key(signal))
         if previous is None:
@@ -192,7 +204,23 @@ class MarketEngine:
 
     @staticmethod
     def _cooldown_key(signal: Signal) -> str:
-        return f"{signal.asset}:{signal.direction}:{signal.timeframe}"
+        return f"{signal.asset}:{signal.timeframe}"
+
+    @staticmethod
+    def _normalize_market_label(asset: str) -> str:
+        cleaned = asset.strip().upper().replace(" ", "").replace("_", "-")
+        if not cleaned:
+            return ""
+        if not cleaned.endswith("-OTC"):
+            cleaned = f"{cleaned}-OTC"
+        aliases = {
+            "NVIDIAAMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA/AMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA-AMD-OTC": "NVDA/AMD-OTC",
+            "NVDAAMD-OTC": "NVDA/AMD-OTC",
+            "NVDA/AMD-OTC": "NVDA/AMD-OTC",
+        }
+        return aliases.get(cleaned, cleaned)
 
     async def _broadcast(self) -> None:
         if not self._clients:

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 
 
 class Settings(BaseSettings):
@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     iq_option_balance_mode: str = Field(default="PRACTICE", alias="IQ_OPTION_BALANCE_MODE")
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
-    markets: str = Field(default="EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC", alias="MARKETS")
+    markets: str = Field(
+        default="EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC",
+        alias="MARKETS",
+    )
     default_timeframe: int = Field(default=60, alias="DEFAULT_TIMEFRAME")
     poll_interval_seconds: float = Field(default=2.0, alias="POLL_INTERVAL_SECONDS")
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
@@ -31,7 +34,7 @@ class Settings(BaseSettings):
             return ",".join(str(market).strip() for market in value if str(market).strip())
         if isinstance(value, str):
             return value
-        return "EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC"
+        return "EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC"
 
     @field_validator("default_timeframe")
     @classmethod

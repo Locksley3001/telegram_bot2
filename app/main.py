@@ -73,11 +73,20 @@ async def get_state():
     return engine.state()
 
 
+@app.get("/api/performance")
+async def get_performance():
+    return engine.performance.summary()
+
+
 @app.post("/api/telegram/test")
 async def test_telegram() -> TelegramTestResponse:
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
         raise HTTPException(status_code=400, detail="Telegram no esta configurado.")
-    return TelegramTestResponse(sent=await engine.notifier.send_test())
+    sent = await engine.notifier.send_test()
+    if not sent:
+        detail = engine.notifier.last_error or "Telegram no confirmo el envio."
+        raise HTTPException(status_code=502, detail=detail)
+    return TelegramTestResponse(sent=True)
 
 
 @app.post("/api/markets")
@@ -85,12 +94,12 @@ async def add_market(payload: MarketPayload):
     return await engine.add_market(payload.asset)
 
 
-@app.delete("/api/markets/{asset}")
+@app.delete("/api/markets/{asset:path}")
 async def remove_market(asset: str):
     return await engine.remove_market(asset)
 
 
-@app.post("/api/markets/{asset}/enabled")
+@app.post("/api/markets/{asset:path}/enabled")
 async def set_market_enabled(asset: str, payload: EnabledPayload):
     return await engine.set_market_enabled(asset, payload.enabled)
 

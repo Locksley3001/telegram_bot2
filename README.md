@@ -46,14 +46,17 @@ Variables opcionales:
 ```env
 IQ_OPTION_BALANCE_MODE=PRACTICE
 IQ_OPTION_2FA_CODE=
-MARKETS=EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC
+MARKETS=EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC
 DEFAULT_TIMEFRAME=60
 POLL_INTERVAL_SECONDS=2.0
 CANDLE_COUNT=80
 SIGNAL_COOLDOWN_SECONDS=45
 ```
 
-Telegram solo envia senales con puntuacion `>= 6`.
+Telegram solo envia senales con puntuacion `>= 7`.
+
+El dashboard de rendimiento guarda las senales emitidas en `data/performance.json` y las evalua
+despues de la expiracion sugerida para medir ganadas, perdidas, empates, pendientes y acierto por mercado.
 
 ## CONFIGURACION_MANUAL_REQUERIDA
 
