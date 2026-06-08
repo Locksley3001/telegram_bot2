@@ -162,6 +162,14 @@ class SignalLearningSystem:
         signal.main_reason = f"{signal.main_reason} | {suffix}"
         return signal
 
+    def remember_technical_block(self, reason: str) -> None:
+        cleaned = reason.strip()
+        if not cleaned:
+            return
+        self.block_recommendations += 1
+        self.last_decision = f"Aprendizaje observa bloqueo tecnico: {cleaned}"
+        self._save()
+
     def summary(self) -> LearningSummary:
         risky = self._risky_patterns()
         return LearningSummary(

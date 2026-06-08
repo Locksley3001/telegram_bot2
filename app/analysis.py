@@ -21,9 +21,10 @@ class PriceActionAnalyzer:
         if len(signal_candles) < CCI_PERIOD + 2:
             return zones, None, self._empty_context()
 
-        metrics = [self._metrics(candle) for candle in signal_candles]
-        latest = signal_candles[-1]
-        chosen_side, chosen = self._binary_minute_context(signal_candles, metrics, timeframe)
+        study_candles = self._study_candles(usable, signal_candles, timeframe)
+        metrics = [self._metrics(candle) for candle in study_candles]
+        latest = study_candles[-1]
+        chosen_side, chosen = self._binary_minute_context(study_candles, metrics, timeframe)
 
         if chosen_side == 0 or chosen.get("stake_amount", 0) <= 0:
             return zones, None, chosen
@@ -33,7 +34,7 @@ class PriceActionAnalyzer:
         created_at = utc_now()
         pending_execution_at = datetime.fromtimestamp(latest.timestamp + timeframe, tz=timezone.utc)
         signal = Signal(
-            id=f"{asset}:{timeframe}:{direction}:binary1m-pending:{int(latest.timestamp)}",
+            id=f"{asset}:{timeframe}:{direction}:{chosen.get('pattern', 'binary1m')}:pending:{int(latest.timestamp)}",
             asset=asset,
             direction=direction,
             score=max(1, min(10, round(chosen["score"]))),
@@ -76,6 +77,12 @@ class PriceActionAnalyzer:
         cci_values = self._cci_series(context_candles, CCI_PERIOD)
         latest_cci = cci_values[-1] if cci_values else 0.0
         previous_cci = cci_values[-2] if len(cci_values) >= 2 else latest_cci
+        latest_metric = metrics[-1]
+        previous_five = metrics[-6:-1]
+        average_body = sum(item.body for item in previous_five) / max(1, len(previous_five))
+        is_reversal_setup = "retroceso" in record.id
+        pressure_side = -side if is_reversal_setup else side
+
         opposite_cci_cross = (
             side == 1
             and previous_cci > CCI_OVERBOUGHT
@@ -88,13 +95,26 @@ class PriceActionAnalyzer:
         if opposite_cci_cross:
             return f"CCI(20) cruzo en sentido contrario al abrir ({latest_cci:.1f})"
 
-        exhaustion_signals = self._binary_exhaustion_signals(side, context_candles, metrics, cci_values)
-        if len(exhaustion_signals) >= 2:
-            return f"cansancio detectado al abrir: {', '.join(exhaustion_signals[:3])}"
+        exhaustion_signals = self._binary_exhaustion_signals(pressure_side, context_candles, metrics, cci_values)
+        pressure_still_strong = (
+            latest_metric.direction == pressure_side
+            and latest_metric.body >= average_body * 0.92
+            and latest_metric.body_ratio >= 0.42
+            and self._clean_impulse(pressure_side, latest_metric)
+        )
+        pressure_fighting = self._fighting_current_candle(pressure_side, latest_metric, average_body)
+        decisive_tired_signals = [
+            signal
+            for signal in exhaustion_signals
+            if signal in {"mecha larga en direccion del trade", "Doji o Pin Bar contrario"}
+        ]
+        if pressure_fighting:
+            decisive_tired_signals.append("vela actual pelea contra el movimiento")
+        if is_reversal_setup and pressure_still_strong and not pressure_fighting:
+            return "retroceso abortado: el empuje sigue fuerte al abrir"
+        if not is_reversal_setup and decisive_tired_signals:
+            return f"continuacion abortada: cansancio al abrir ({', '.join(decisive_tired_signals[:3])})"
 
-        latest_metric = metrics[-1]
-        previous_five = metrics[-6:-1]
-        average_body = sum(item.body for item in previous_five) / max(1, len(previous_five))
         opposite_impulse = latest_metric.direction == -side and latest_metric.body >= average_body * 1.2
         if opposite_impulse and latest_metric.body_ratio >= 0.42:
             return "vela inicial invalida la entrada con impulso contrario"
@@ -145,6 +165,17 @@ class PriceActionAnalyzer:
     @staticmethod
     def _zone_exists(zones: List[Zone], price: float, kind: str, tolerance: float) -> bool:
         return any(zone.kind == kind and abs(zone.price - price) <= tolerance for zone in zones)
+
+    def _study_candles(self, usable: List[Candle], closed: List[Candle], timeframe: int) -> List[Candle]:
+        if not usable:
+            return closed
+        latest = usable[-1]
+        last_closed = closed[-1] if closed else None
+        if latest.is_closed or last_closed is None or latest.timestamp <= last_closed.timestamp:
+            return closed
+        if self._candle_progress(latest, timeframe) < MIN_FORMING_PROGRESS:
+            return closed
+        return [*closed, latest]
 
     def _cci_reaction_context(
         self,
@@ -251,25 +282,27 @@ class PriceActionAnalyzer:
     ) -> Tuple[int, dict]:
         cci_values = self._cci_series(candles, CCI_PERIOD)
         latest_cci = cci_values[-1] if cci_values else 0.0
-        previous_cci = cci_values[-2] if len(cci_values) >= 2 else latest_cci
         latest = candles[-1]
         latest_metric = metrics[-1]
+        recent_cci = cci_values[-10:-1] if len(cci_values) >= 11 else cci_values[:-1]
+        high_extreme = latest_cci >= CCI_OVERBOUGHT and (
+            not recent_cci or latest_cci >= max(recent_cci) - 5.0 or latest_cci >= 130.0
+        )
+        low_extreme = latest_cci <= CCI_OVERSOLD and (
+            not recent_cci or latest_cci <= min(recent_cci) + 5.0 or latest_cci <= -130.0
+        )
 
-        bullish_cross = previous_cci < CCI_OVERSOLD <= latest_cci
-        bearish_cross = previous_cci > CCI_OVERBOUGHT >= latest_cci
-        signal_side = 1 if bullish_cross else -1 if bearish_cross else 0
-
-        if signal_side == 0:
+        if not high_extreme and not low_extreme:
             context = self._empty_context()
             context.update(
                 {
                     "cci": round(latest_cci, 1),
-                    "market_message": "SENAL DESCARTADA - CCI(20) sin cruce confirmado en vela cerrada",
-                    "reason": "CCI(20) sin cruce claro desde zona extrema",
+                    "market_message": "ESPERANDO CCI(20) EN EXTREMO OPERABLE",
+                    "reason": "CCI(20) no esta rompiendo maximo/minimo relevante",
                     "analysis_text": self._format_binary_analysis(
                         latest,
                         latest_cci,
-                        "sin cruce",
+                        "sin extremo operable",
                         "ausente",
                         "ausente",
                         "no detectado",
@@ -278,80 +311,146 @@ class PriceActionAnalyzer:
                         "sin tendencia",
                         "parcial",
                         0,
-                        "SENAL DESCARTADA - CCI(20) sin cruce confirmado",
+                        "SENAL DESCARTADA - CCI(20) sin extremo operable",
+                        setup_label="observacion",
                     ),
                 }
             )
             return 0, context
 
-        direction = "CALL" if signal_side == 1 else "PUT"
-        direction_text = "alcista" if signal_side == 1 else "bajista"
+        pressure_side = 1 if high_extreme else -1
+        continuation_side = pressure_side
+        reversal_side = -pressure_side
+        extreme_label = "sobrecompra rompiendo maximos" if high_extreme else "sobreventa rompiendo minimos"
         previous_five = metrics[-6:-1]
         average_body = sum(item.body for item in previous_five) / max(1, len(previous_five))
-        strength_active = latest_metric.direction == signal_side and latest_metric.body >= average_body * 1.5
-        strength_label = "alta" if strength_active else "baja" if latest_metric.direction == signal_side else "ausente"
-        strength = 8.0 if strength_active else 4.0 if latest_metric.direction == signal_side else 1.5
+        current_clean = self._clean_impulse(pressure_side, latest_metric)
+        current_strong = (
+            latest_metric.direction == pressure_side
+            and latest_metric.body >= average_body * 0.92
+            and latest_metric.body_ratio >= 0.42
+            and current_clean
+        )
+        current_fighting = self._fighting_current_candle(pressure_side, latest_metric, average_body)
 
         last_three = metrics[-3:]
-        aligned_three = sum(1 for item in last_three if item.direction == signal_side)
-        continuity_active = aligned_three >= 2
+        aligned_three = sum(1 for item in last_three if item.direction == pressure_side)
+        last_five = metrics[-5:]
+        aligned_five = sum(1 for item in last_five if item.direction == pressure_side)
+        continuity_active = aligned_three >= 2 or aligned_five >= 3
         continuity_label = "confirmada" if continuity_active else "ausente"
-        continuity = min(10.0, aligned_three * 3.2 + 0.4)
+        continuity = min(10.0, aligned_three * 2.4 + aligned_five * 1.1)
 
-        exhaustion_signals = self._binary_exhaustion_signals(signal_side, candles, metrics, cci_values)
-        exhaustion_blocked = len(exhaustion_signals) >= 2
-        exhaustion_label = "detectado" if exhaustion_blocked else "no detectado"
-        exhaustion = min(10.0, len(exhaustion_signals) * 3.5 + 1.0)
-
+        pressure_strength = self._strength(pressure_side, metrics[-8:])
+        exhaustion_signals = self._binary_exhaustion_signals(pressure_side, candles, metrics, cci_values)
+        if current_fighting and "vela actual pelea contra el movimiento" not in exhaustion_signals:
+            exhaustion_signals.append("vela actual pelea contra el movimiento")
+        decisive_tired_signals = [
+            signal
+            for signal in exhaustion_signals
+            if signal
+            in {
+                "mecha larga en direccion del trade",
+                "Doji o Pin Bar contrario",
+                "vela actual pelea contra el movimiento",
+            }
+        ]
+        if not current_strong:
+            decisive_tired_signals.extend(
+                signal for signal in exhaustion_signals if signal == "CCI extremo con perdida de momentum"
+            )
+        tired_enough = current_fighting or bool(decisive_tired_signals)
+        exhaustion_blocked = len(decisive_tired_signals) >= 3
+        exhaustion_label = "detectado" if tired_enough else "no detectado"
+        exhaustion = min(10.0, len(exhaustion_signals) * 2.7 + (2.0 if current_fighting else 1.0))
         trend_side, trend_label, trend_strength = self._trend_context(candles[-15:])
+        if trend_side == 0 and continuity_active:
+            trend_side = pressure_side
+            trend_label = "alcista" if trend_side == 1 else "bajista"
+
+        price_breakout = self._price_breakout(pressure_side, candles)
+        if current_strong and continuity_active and not tired_enough:
+            signal_side = continuation_side
+            setup_label = "continuacion"
+            setup_reason = "CCI extremo con fuerza limpia; se opera a favor del empuje"
+        elif continuity_active and tired_enough:
+            signal_side = reversal_side
+            setup_label = "retroceso"
+            setup_reason = "CCI extremo con movimiento cansado; se opera retroceso contra el empuje"
+        elif current_strong and trend_side == pressure_side:
+            signal_side = continuation_side
+            setup_label = "continuacion"
+            setup_reason = "tendencia y vela actual sostienen la presion"
+        else:
+            signal_side = 0
+            setup_label = "bloqueada"
+            setup_reason = "CCI extremo, pero falta decidir entre continuidad y retroceso"
+
+        direction = "CALL" if signal_side == 1 else "PUT" if signal_side == -1 else "NONE"
+        direction_text = "alcista" if signal_side == 1 else "bajista" if signal_side == -1 else "sin direccion"
         trend_relation = (
             "a favor" if trend_side == signal_side else "en contra" if trend_side == -signal_side else "sin tendencia"
         )
-        confluence_invalid = trend_side == -signal_side and trend_strength >= 2
-        confluence_total = strength_active and continuity_active and trend_side == signal_side
+        confluence_invalid = bool(
+            signal_side == reversal_side and trend_strength >= 2 and current_strong and not tired_enough
+        )
+        confluence_total = (
+            signal_side == continuation_side and current_strong and continuity_active and trend_side == signal_side
+        ) or (
+            signal_side == reversal_side and tired_enough and continuity_active and trend_side == pressure_side
+        )
         confluence_label = "invalida" if confluence_invalid else "total" if confluence_total else "parcial"
 
         factor_score = 1
-        factor_score += 1 if strength_active else 0
+        factor_score += 1 if price_breakout else 0
+        factor_score += 1 if current_strong or tired_enough else 0
         factor_score += 1 if continuity_active else 0
-        factor_score += 1 if not exhaustion_blocked else 0
-        factor_score += 1 if trend_side == signal_side else 0
+        factor_score += 1 if (signal_side == continuation_side and trend_side == signal_side) or (
+            signal_side == reversal_side and trend_side == pressure_side and tired_enough
+        ) else 0
         factor_score += 1 if confluence_total else 0
 
         score = max(1.0, min(10.0, 1.0 + factor_score * 1.5))
         confidence = "discarded"
         stake_amount = 0
-        decision = "SENAL DESCARTADA - puntuacion insuficiente"
+        decision = f"SENAL DESCARTADA - {setup_reason}"
         blockers: List[str] = []
-        if exhaustion_blocked:
-            blockers.append("cansancio detectado en 2+ senales")
+        if signal_side == 0:
+            blockers.append(setup_reason)
+        if exhaustion_blocked and signal_side == continuation_side:
+            blockers.append("demasiado cansancio para continuar tendencia")
         if confluence_invalid:
-            blockers.append("contradiccion directa entre CCI y tendencia")
+            blockers.append("tendencia fuerte sin cansancio suficiente para contra-tendencia")
 
         if blockers:
             decision = f"SENAL DESCARTADA - {'; '.join(blockers)}"
         elif factor_score >= 4:
             confidence = "high"
             stake_amount = 20000
-            decision = f"OPERACION {direction} - $20.000 - al abrir siguiente vela"
+            decision = f"OPERACION {direction} - $20.000 - al abrir siguiente vela ({setup_label})"
         elif factor_score >= 2:
             confidence = "low"
             stake_amount = 10000
-            decision = f"OPERACION {direction} - $10.000 - al abrir siguiente vela"
+            decision = f"OPERACION {direction} - $10.000 - al abrir siguiente vela ({setup_label})"
 
-        cci_cross_label = "cruce alcista" if signal_side == 1 else "cruce bajista"
-        exhaustion_detail = ", ".join(exhaustion_signals) if exhaustion_signals else "sin senales especificas"
+        if tired_enough:
+            exhaustion_detail = ", ".join(exhaustion_signals) if exhaustion_signals else "sin senales especificas"
+        elif exhaustion_signals:
+            exhaustion_detail = f"contexto extendido no bloqueante: {', '.join(exhaustion_signals)}"
+        else:
+            exhaustion_detail = "sin senales especificas"
         reason = (
             f"PENDIENTE - Ejecutar al abrir la siguiente vela de 1 minuto. "
-            f"CCI(20) {cci_cross_label} ({latest_cci:.1f}); {factor_score}/6 factores alineados."
+            f"CCI(20) en {extreme_label} ({latest_cci:.1f}); setup {setup_label}; {factor_score}/6 factores."
         )
         if confidence == "discarded":
             reason = decision
 
+        strength_label = "alta" if current_strong else "baja" if latest_metric.direction == pressure_side else "ausente"
         analysis_text = self._format_binary_analysis(
             latest,
             latest_cci,
-            cci_cross_label,
+            extreme_label,
             strength_label,
             continuity_label,
             exhaustion_label,
@@ -365,11 +464,13 @@ class PriceActionAnalyzer:
             average_body=average_body,
             last_three=self._last_three_label(last_three),
             direction_text=direction_text,
+            setup_label=setup_label,
         )
 
+        learning_event = None if confidence != "discarded" else f"{setup_reason}; CCI {extreme_label}; {factor_score}/6"
         return signal_side, {
             "score": score,
-            "strength": round(strength, 1),
+            "strength": round(pressure_strength if current_strong else max(1.0, pressure_strength * 0.65), 1),
             "continuity": round(continuity, 1),
             "exhaustion": round(exhaustion, 1),
             "cci": round(latest_cci, 1),
@@ -379,10 +480,12 @@ class PriceActionAnalyzer:
             "reason": reason,
             "analysis_text": analysis_text,
             "market_message": decision,
-            "pattern": "binary_1m_closed_candle",
+            "pattern": f"cci_extreme_{setup_label}",
             "trend_label": trend_label,
             "trend_relation": trend_relation,
             "confluence": confluence_label,
+            "learning_event": learning_event,
+            "analysis_candle_ts": int(latest.timestamp),
         }
 
     @staticmethod
@@ -422,6 +525,29 @@ class PriceActionAnalyzer:
         if latest_metric.body_ratio <= 0.10 or opposite_pin:
             signals.append("Doji o Pin Bar contrario")
         return signals
+
+    @staticmethod
+    def _clean_impulse(side: int, metric: CandleMetrics) -> bool:
+        opposing_wick = metric.lower_wick_ratio if side == 1 else metric.upper_wick_ratio
+        return opposing_wick <= 0.32 and metric.body_ratio >= 0.42
+
+    @staticmethod
+    def _fighting_current_candle(side: int, metric: CandleMetrics, average_body: float) -> bool:
+        opposing_wick = metric.upper_wick_ratio if side == 1 else metric.lower_wick_ratio
+        small_body = metric.body <= average_body * 0.78 or metric.body_ratio <= 0.28
+        opposite_body = metric.direction == -side and metric.body_ratio >= 0.22
+        heavy_rejection = opposing_wick >= 0.38
+        return (small_body and heavy_rejection) or opposite_body
+
+    @staticmethod
+    def _price_breakout(side: int, candles: List[Candle]) -> bool:
+        if len(candles) < 8:
+            return False
+        latest = candles[-1]
+        previous = candles[-8:-1]
+        if side == 1:
+            return latest.high >= max(candle.high for candle in previous)
+        return latest.low <= min(candle.low for candle in previous)
 
     @staticmethod
     def _trend_context(candles: List[Candle]) -> Tuple[int, str, int]:
@@ -472,11 +598,13 @@ class PriceActionAnalyzer:
         average_body: float = 0.0,
         last_three: str = "-",
         direction_text: str = "-",
+        setup_label: str = "-",
     ) -> str:
         timestamp = datetime.fromtimestamp(candle.timestamp, tz=timezone.utc).strftime("%H:%M")
         return "\n".join(
             [
                 f"[ANALISIS VELA - {timestamp}]",
+                f"Setup: {setup_label}",
                 f"CCI(20): {cci:.1f} -> {cci_label}",
                 f"Fuerza: {strength_label} - cuerpo {body:.6f} vs promedio {average_body:.6f}",
                 f"Continuidad: {continuity_label} - ultimas 3 velas {last_three}",
@@ -491,9 +619,9 @@ class PriceActionAnalyzer:
                 "",
                 "APRENDIZAJE ACTIVO:",
                 f"- Evitando: entradas dentro de la vela activa y operaciones con cansancio confirmado ({direction_text}).",
-                "- Aprendiendo a evitar: contradicciones entre CCI, tendencia y continuidad antes de arriesgar saldo.",
-                "- Operando si o si cuando: CCI cruza desde extremo, no hay bloqueo y al menos 2 factores acompanian.",
-                "- Jamas opero cuando: saldo insuficiente, 2+ senales de cansancio o confluencia invalida.",
+                "- Aprendiendo a evitar: extremos CCI ambiguos donde no se distingue continuidad de retroceso.",
+                "- Operando si o si cuando: CCI rompe extremo y la fuerza/continuidad/cansancio definen direccion.",
+                "- Jamas opero cuando: saldo insuficiente, confluencia invalida o vela actual contradice el setup.",
             ]
         )
 

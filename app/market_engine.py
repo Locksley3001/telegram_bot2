@@ -72,6 +72,7 @@ class MarketEngine:
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
+        self._last_learning_event: Dict[str, str] = {}
         self._emitted_signal_ids: Set[str] = {signal.id for signal in self.signals}
         self._restore_signal_cooldowns()
         self._task: Optional[asyncio.Task] = None
@@ -216,6 +217,8 @@ class MarketEngine:
                     context["market_message"] = decision.reason
                     context["reason"] = decision.reason
                     signal = None
+            elif context.get("learning_event"):
+                self._remember_learning_event(asset, context)
             snapshot = AnalysisSnapshot(
                 asset=asset,
                 timeframe=self.timeframe,
@@ -253,6 +256,16 @@ class MarketEngine:
         except Exception as exc:
             self.last_error = f"{asset}: {exc}"
             LOGGER.exception("Fallo analizando %s", asset)
+
+    def _remember_learning_event(self, asset: str, context: dict) -> None:
+        event = str(context.get("learning_event") or "").strip()
+        if not event:
+            return
+        key = f"{asset}:{context.get('analysis_candle_ts', '')}"
+        if self._last_learning_event.get(asset) == key:
+            return
+        self._last_learning_event[asset] = key
+        self.learning.remember_technical_block(f"{asset}: {event}")
 
     def _can_emit(self, signal: Signal) -> bool:
         if signal.stake_amount < 10000:
