@@ -144,6 +144,18 @@
               <span>Permitidas</span>
               <strong id="learningAllowed">0</strong>
             </article>
+            <article class="stat-tile">
+              <span>Broker real</span>
+              <strong id="brokerTradingEnabled">OFF</strong>
+            </article>
+            <article class="stat-tile win">
+              <span>Ops broker</span>
+              <strong id="brokerTradesPlaced">0</strong>
+            </article>
+            <article class="stat-tile loss">
+              <span>Fallos broker</span>
+              <strong id="brokerTradesFailed">0</strong>
+            </article>
           </div>
 
           <div class="dashboard-columns">
@@ -175,6 +187,14 @@
               <h3>Resultados recientes</h3>
             </header>
             <div id="resultList" class="result-list"></div>
+          </section>
+
+          <section class="dashboard-section results-section">
+            <header>
+              <h3>Broker en vivo</h3>
+              <span id="brokerTradingMode">PRACTICE</span>
+            </header>
+            <div id="brokerTradeList" class="result-list"></div>
           </section>
         </section>
 

@@ -63,12 +63,14 @@ async def health() -> dict:
         "iq_option_configured": bool(settings.iq_option_email and settings.iq_option_password),
         "iq_option_balance_mode": settings.iq_option_balance_mode,
         "iq_option_2fa_configured": bool(settings.iq_option_2fa_code),
+        "broker_trading_enabled": settings.broker_trading_enabled,
+        "broker_trade_entry_window_seconds": settings.broker_trade_entry_window_seconds,
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
         "telegram_last_error": engine.notifier.last_error,
         "data_dir": str(engine._data_dir),
         "signal_history_limit": settings.signal_history_limit,
         "api_signal_limit": settings.api_signal_limit,
-        "version": "iq-option-migration-2026-06-03",
+        "version": "iq-option-real-trading-2026-06-08",
     }
 
 
@@ -80,6 +82,11 @@ async def get_state():
 @app.get("/api/performance")
 async def get_performance():
     return engine.performance.summary()
+
+
+@app.get("/api/broker/trades")
+async def get_broker_trades():
+    return engine.trade_executor.summary(limit=100)
 
 
 @app.post("/api/telegram/test")

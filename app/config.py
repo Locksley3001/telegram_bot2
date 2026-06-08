@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     learning_min_rule_samples: int = Field(default=5, alias="LEARNING_MIN_RULE_SAMPLES")
     learning_min_similarity_samples: int = Field(default=4, alias="LEARNING_MIN_SIMILARITY_SAMPLES")
     learning_exploration_interval: int = Field(default=20, alias="LEARNING_EXPLORATION_INTERVAL")
+    broker_trading_enabled: bool = Field(default=False, alias="BROKER_TRADING_ENABLED")
+    broker_trade_entry_window_seconds: float = Field(default=3.0, alias="BROKER_TRADE_ENTRY_WINDOW_SECONDS")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 

@@ -60,6 +60,8 @@ LEARNING_MIN_WIN_RATE=58
 LEARNING_MIN_RULE_SAMPLES=5
 LEARNING_MIN_SIMILARITY_SAMPLES=4
 LEARNING_EXPLORATION_INTERVAL=20
+BROKER_TRADING_ENABLED=false
+BROKER_TRADE_ENTRY_WINDOW_SECONDS=3
 ```
 
 Telegram solo envia senales con puntuacion `>= 7`.
@@ -77,6 +79,27 @@ El filtro de aprendizaje usa todo `DATA_DIR/performance.json`, guarda su memoria
 y bloquea senales cuando casos historicos parecidos no superan el acierto minimo configurado. Para evitar
 que el aprendizaje se quede sin muestras nuevas, `LEARNING_EXPLORATION_INTERVAL` permite una senal fuerte
 de exploracion cada N bloqueos; usa `0` para desactivarlo.
+
+## Trading automatico en IQ Option
+
+Por seguridad, la ejecucion de operaciones en el broker esta apagada por defecto. Para activarla:
+
+```env
+BROKER_TRADING_ENABLED=true
+IQ_OPTION_BALANCE_MODE=PRACTICE
+```
+
+Usa primero `PRACTICE` para validar que las entradas coinciden con el saldo virtual. Solo cambia
+`IQ_OPTION_BALANCE_MODE=REAL` cuando quieras operar con dinero real.
+
+El bot no compra al enviar la alerta de Telegram. Compra cuando el historial de rendimiento confirma
+que la senal paso el chequeo de aborto y entro en estado `pending`, que es el mismo flujo usado por
+el saldo virtual. Las operaciones abortadas no se envian al broker.
+
+`BROKER_TRADE_ENTRY_WINDOW_SECONDS` controla cuantos segundos despues de la apertura esperara el bot
+para enviar la orden; por defecto son `3`. Los intentos reales se guardan en
+`DATA_DIR/broker_trades.json` y se pueden ver en el dashboard, en la seccion **Broker en vivo**, o en
+`/api/broker/trades`.
 
 ## CONFIGURACION_MANUAL_REQUERIDA
 

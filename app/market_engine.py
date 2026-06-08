@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Set
 from fastapi import WebSocket
 
 from app.analysis import NO_EDGE_MESSAGE, PriceActionAnalyzer
+from app.broker_trade_executor import BrokerTradeExecutor
 from app.config import Settings
 from app.iq_option_broker import IQOptionBroker
 from app.learning import SignalLearningSystem
@@ -43,6 +44,12 @@ class MarketEngine:
         )
         self.analyzer = PriceActionAnalyzer()
         self.performance = PerformanceTracker(self._data_dir / "performance.json")
+        self.trade_executor = BrokerTradeExecutor(
+            self._data_dir / "broker_trades.json",
+            enabled=settings.broker_trading_enabled,
+            balance_mode=settings.iq_option_balance_mode,
+            entry_window_seconds=settings.broker_trade_entry_window_seconds,
+        )
         self.learning = SignalLearningSystem(
             self._data_dir / "learning.json",
             enabled=settings.learning_enabled,
@@ -156,6 +163,7 @@ class MarketEngine:
             performance=self.performance.summary(),
             learning=self.learning.summary(),
             virtual_balance=self.performance.virtual_balance(timeframe=self.timeframe),
+            broker_trading=self.trade_executor.summary(),
             last_error=self.last_error,
         )
 
@@ -202,6 +210,9 @@ class MarketEngine:
             if len(candles) < 4:
                 candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
             resolved_records = self.performance.evaluate(asset, candles, self.analyzer.abort_pending_reason)
+            executed_trades = await self.trade_executor.execute_due(asset, self.performance.records.values(), self.broker)
+            if executed_trades:
+                LOGGER.info("Operaciones enviadas a IQ Option para %s: %s", asset, [trade.signal_id for trade in executed_trades])
             if resolved_records:
                 self.learning.rebuild(self.performance.records.values())
             pending_outcomes = self.notifier.pending_outcomes(self.performance.records.values())

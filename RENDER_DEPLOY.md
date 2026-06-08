@@ -63,6 +63,8 @@ LEARNING_ENABLED -> Activa o pausa el filtro de aprendizaje. Por defecto: true.
 LEARNING_MIN_HISTORY -> Casos resueltos antes de bloquear por aprendizaje. Por defecto: 30.
 LEARNING_MIN_WIN_RATE -> Porcentaje minimo esperado para permitir una senal. Por defecto: 58.
 LEARNING_EXPLORATION_INTERVAL -> Permite una senal fuerte cada N bloqueos para seguir aprendiendo. Por defecto: 20. Usa 0 para desactivarlo.
+BROKER_TRADING_ENABLED -> Envia operaciones al broker cuando una senal pasa a pending. Por defecto: false.
+BROKER_TRADE_ENTRY_WINDOW_SECONDS -> Ventana maxima para entrar despues de abrir la vela. Por defecto: 3.
 ```
 
 ## 4. Persistencia en Render
@@ -81,6 +83,7 @@ Con esto se conservan:
 - `/var/data/learning.json`: memoria del filtro de aprendizaje.
 - `/var/data/signals.json`: historial de senales.
 - `/var/data/telegram_notifications.json`: senales/resultados/resumenes ya notificados.
+- `/var/data/broker_trades.json`: intentos de operaciones enviados a IQ Option.
 
 Si no montas disco persistente, Render puede perder esos JSON al redeplegar y el aprendizaje puede reiniciar.
 En el plan gratis no configures `DATA_DIR=/var/data`, porque esa ruta no sera escribible sin disco. Usa `DATA_DIR=data` o elimina la variable.

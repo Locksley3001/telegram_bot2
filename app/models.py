@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 Direction = Literal["CALL", "PUT", "NONE"]
 SignalGrade = Literal["ignore", "weak", "valid", "strong"]
 OutcomeStatus = Literal["waiting_entry", "pending", "win", "loss", "push", "aborted"]
+BrokerTradeStatus = Literal["placed", "failed"]
 
 
 class Candle(BaseModel):
@@ -127,6 +128,31 @@ class VirtualBalanceSummary(BaseModel):
     history: List[BalanceEvent] = Field(default_factory=list)
 
 
+class BrokerTrade(BaseModel):
+    signal_id: str
+    broker_order_id: Optional[str] = None
+    status: BrokerTradeStatus
+    asset: str
+    direction: Direction
+    stake_amount: int
+    expiration_seconds: int
+    balance_mode: str
+    requested_at: datetime
+    placed_at: Optional[datetime] = None
+    error: str = ""
+
+
+class BrokerTradingSummary(BaseModel):
+    enabled: bool = False
+    balance_mode: str = "PRACTICE"
+    entry_window_seconds: float = 3.0
+    total: int = 0
+    placed: int = 0
+    failed: int = 0
+    last_error: str = ""
+    recent_trades: List[BrokerTrade] = Field(default_factory=list)
+
+
 class PerformanceBucket(BaseModel):
     name: str
     total: int = 0
@@ -192,6 +218,7 @@ class EngineState(BaseModel):
     performance: PerformanceSummary = Field(default_factory=PerformanceSummary)
     learning: LearningSummary = Field(default_factory=LearningSummary)
     virtual_balance: VirtualBalanceSummary = Field(default_factory=VirtualBalanceSummary)
+    broker_trading: BrokerTradingSummary = Field(default_factory=BrokerTradingSummary)
     last_error: Optional[str] = None
 
 

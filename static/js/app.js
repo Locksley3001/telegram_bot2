@@ -53,6 +53,11 @@ const els = {
   learningBlockRecommendations: document.getElementById("learningBlockRecommendations"),
   learningExploration: document.getElementById("learningExploration"),
   learningAllowed: document.getElementById("learningAllowed"),
+  brokerTradingEnabled: document.getElementById("brokerTradingEnabled"),
+  brokerTradesPlaced: document.getElementById("brokerTradesPlaced"),
+  brokerTradesFailed: document.getElementById("brokerTradesFailed"),
+  brokerTradingMode: document.getElementById("brokerTradingMode"),
+  brokerTradeList: document.getElementById("brokerTradeList"),
   learningStatus: document.getElementById("learningStatus"),
   learningPatterns: document.getElementById("learningPatterns"),
   marketStats: document.getElementById("marketStats"),
@@ -343,6 +348,7 @@ function renderDashboard() {
   renderBuckets(els.marketStats, perf.by_market || [], "Sin operaciones evaluadas por mercado");
   renderBuckets(els.directionStats, perf.by_direction || [], "Sin operaciones evaluadas por dirección");
   renderResults(perf.recent_results || []);
+  renderBrokerTrades(state.data.broker_trading || {});
 }
 
 function renderLearning(learning) {
@@ -497,6 +503,42 @@ function renderResults(results) {
       ${result.abort_reason ? `<div class="result-meta">Abortada: ${result.abort_reason}</div>` : ""}
     `;
     els.resultList.appendChild(row);
+  });
+}
+
+function renderBrokerTrades(brokerTrading) {
+  if (!els.brokerTradeList) return;
+  const enabled = Boolean(brokerTrading.enabled);
+  els.brokerTradingEnabled.textContent = enabled ? "ON" : "OFF";
+  els.brokerTradingEnabled.style.color = enabled ? "var(--green)" : "var(--muted)";
+  els.brokerTradesPlaced.textContent = String(brokerTrading.placed || 0);
+  els.brokerTradesFailed.textContent = String(brokerTrading.failed || 0);
+  els.brokerTradingMode.textContent = `${brokerTrading.balance_mode || "PRACTICE"} Â· ventana ${Number(brokerTrading.entry_window_seconds || 0).toFixed(1)}s`;
+  els.brokerTradeList.innerHTML = "";
+  const trades = brokerTrading.recent_trades || [];
+  if (!trades.length) {
+    const empty = document.createElement("p");
+    empty.className = "market-meta";
+    empty.textContent = enabled ? "Esperando entradas validadas por el saldo virtual." : "Trading real apagado por variable de entorno.";
+    els.brokerTradeList.appendChild(empty);
+    return;
+  }
+
+  trades.slice(-20).reverse().forEach((trade) => {
+    const row = document.createElement("article");
+    row.className = `result-row ${trade.status === "placed" ? "win" : "loss"}`;
+    const time = new Date(trade.placed_at || trade.requested_at).toLocaleTimeString();
+    row.innerHTML = `
+      <div class="result-head">
+        <span>${trade.asset} ${trade.direction} Â· ${formatMoney(trade.stake_amount || 0)}</span>
+        <span class="result-status">${trade.status === "placed" ? "ENVIADA" : "FALLO"}</span>
+      </div>
+      <div class="result-meta">
+        ${time} Â· ${trade.balance_mode || "-"} Â· Orden ${trade.broker_order_id || "-"} Â· Exp ${trade.expiration_seconds || 0}s
+      </div>
+      ${trade.error ? `<div class="result-meta">Error: ${trade.error}</div>` : ""}
+    `;
+    els.brokerTradeList.appendChild(row);
   });
 }
 

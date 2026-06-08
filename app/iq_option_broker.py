@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from datetime import datetime, timezone
 from typing import Any, Iterable, List, Optional, Set, Tuple
@@ -176,6 +177,33 @@ class IQOptionBroker(BrokerInterface):
                 if payout is not None and payout is not False:
                     return float(payout)
         return None
+
+    async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
+        await self._ensure_connection()
+        client = self._require_client()
+        asset_name = self._normalize_asset_name(asset)
+        action = direction.strip().lower()
+        if action not in {"call", "put"}:
+            return False, f"Direccion invalida para IQ Option: {direction}"
+        duration_minutes = max(1, int(math.ceil(max(1, expiration_seconds) / 60)))
+
+        async with self._request_lock:
+            try:
+                success, order_id = await asyncio.to_thread(
+                    client.buy,
+                    float(amount),
+                    asset_name,
+                    action,
+                    duration_minutes,
+                )
+            except Exception:
+                self._connected = False
+                raise
+
+        if success is True:
+            return True, str(order_id)
+        detail = str(order_id or "IQ Option rechazo la compra.")
+        return False, detail
 
     async def start_realtime_candles(self, asset: str, timeframe: int) -> None:
         await self._ensure_connection()

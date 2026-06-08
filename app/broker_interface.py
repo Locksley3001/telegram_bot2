@@ -44,3 +44,6 @@ class BrokerInterface(ABC):
     async def get_payout(self, asset: str, timeframe: int) -> Optional[float]:
         raise NotImplementedError
 
+    @abstractmethod
+    async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
+        raise NotImplementedError
