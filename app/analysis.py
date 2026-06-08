@@ -468,6 +468,16 @@ class PriceActionAnalyzer:
         )
 
         learning_event = None if confidence != "discarded" else f"{setup_reason}; CCI {extreme_label}; {factor_score}/6"
+        shadow_direction = direction
+        if shadow_direction == "NONE":
+            if current_strong:
+                shadow_direction = "CALL" if continuation_side == 1 else "PUT"
+            elif tired_enough:
+                shadow_direction = "CALL" if reversal_side == 1 else "PUT"
+            elif trend_side == pressure_side:
+                shadow_direction = "CALL" if continuation_side == 1 else "PUT"
+            else:
+                shadow_direction = "CALL" if reversal_side == 1 else "PUT"
         return signal_side, {
             "score": score,
             "strength": round(pressure_strength if current_strong else max(1.0, pressure_strength * 0.65), 1),
@@ -486,6 +496,8 @@ class PriceActionAnalyzer:
             "confluence": confluence_label,
             "learning_event": learning_event,
             "analysis_candle_ts": int(latest.timestamp),
+            "shadow_direction": shadow_direction,
+            "shadow_reason": setup_reason,
         }
 
     @staticmethod

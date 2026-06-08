@@ -40,10 +40,14 @@ const els = {
   perfLosses: document.getElementById("perfLosses"),
   perfPending: document.getElementById("perfPending"),
   perfAvgScore: document.getElementById("perfAvgScore"),
+  shadowTotal: document.getElementById("shadowTotal"),
+  shadowWinRate: document.getElementById("shadowWinRate"),
+  shadowPending: document.getElementById("shadowPending"),
   dashboardBalance: document.getElementById("dashboardBalance"),
   dashboardBankruptcies: document.getElementById("dashboardBankruptcies"),
   dashboardTargets: document.getElementById("dashboardTargets"),
   learningExamples: document.getElementById("learningExamples"),
+  learningShadowExamples: document.getElementById("learningShadowExamples"),
   learningMinRate: document.getElementById("learningMinRate"),
   learningBlocked: document.getElementById("learningBlocked"),
   learningBlockRecommendations: document.getElementById("learningBlockRecommendations"),
@@ -328,6 +332,9 @@ function renderDashboard() {
   els.perfLosses.textContent = String(perf.losses || 0);
   els.perfPending.textContent = String(perf.pending || 0);
   els.perfAvgScore.textContent = Number(perf.avg_score || 0).toFixed(1);
+  if (els.shadowTotal) els.shadowTotal.textContent = String(perf.shadow_total || 0);
+  if (els.shadowWinRate) els.shadowWinRate.textContent = `${Number(perf.shadow_win_rate || 0).toFixed(1)}%`;
+  if (els.shadowPending) els.shadowPending.textContent = String(perf.shadow_pending || 0);
   const balance = state.data.virtual_balance || {};
   if (els.dashboardBalance) els.dashboardBalance.textContent = formatMoney(balance.balance || 0);
   if (els.dashboardBankruptcies) els.dashboardBankruptcies.textContent = String(balance.bankruptcies || 0);
@@ -341,6 +348,7 @@ function renderDashboard() {
 function renderLearning(learning) {
   if (!els.learningExamples || !els.learningPatterns) return;
   els.learningExamples.textContent = String(learning.resolved_examples || 0);
+  if (els.learningShadowExamples) els.learningShadowExamples.textContent = String(learning.shadow_examples || 0);
   els.learningMinRate.textContent = `${Number(learning.min_win_rate || 0).toFixed(1)}%`;
   els.learningBlocked.textContent = String(learning.blocked_signals || 0);
   els.learningBlockRecommendations.textContent = String(learning.block_recommendations || learning.blocked_signals || 0);
@@ -466,10 +474,11 @@ function renderResults(results) {
 
   results.forEach((result) => {
     const row = document.createElement("article");
-    row.className = `result-row ${result.status}`;
+    row.className = `result-row ${result.status}${result.is_shadow ? " shadow" : ""}`;
     const created = new Date(result.created_at).toLocaleTimeString();
     const entry = Number(result.entry_price || 0);
     const exit = result.result_price == null ? null : Number(result.result_price);
+    const blockedReason = result.is_shadow && result.blocked_reason ? result.blocked_reason : "";
     row.innerHTML = `
       <div class="result-head">
         <span>${result.direction} · ${result.asset}</span>
@@ -484,6 +493,7 @@ function renderResults(results) {
       <div class="result-meta">
         Apuesta ${formatMoney(result.stake_amount || 0)} · Saldo ${result.balance_after == null ? "-" : formatMoney(result.balance_after)}
       </div>
+      ${blockedReason ? `<div class="result-meta shadow-reason">Bloqueada: ${blockedReason}</div>` : ""}
       ${result.abort_reason ? `<div class="result-meta">Abortada: ${result.abort_reason}</div>` : ""}
     `;
     els.resultList.appendChild(row);

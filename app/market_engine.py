@@ -67,12 +67,13 @@ class MarketEngine:
         self.notifier.remember_outcomes(
             record.id
             for record in self.performance.records.values()
-            if record.status in {"win", "loss", "push", "aborted"}
+            if not record.is_shadow and record.status in {"win", "loss", "push", "aborted"}
         )
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
         self._last_learning_event: Dict[str, str] = {}
+        self._shadow_registered_ids: Set[str] = set()
         self._emitted_signal_ids: Set[str] = {signal.id for signal in self.signals}
         self._restore_signal_cooldowns()
         self._task: Optional[asyncio.Task] = None
@@ -214,10 +215,16 @@ class MarketEngine:
                 if decision.allowed:
                     signal = self.learning.annotate_signal(signal, decision)
                 else:
+                    self._register_shadow_signal(signal, decision.reason)
                     context["market_message"] = decision.reason
                     context["reason"] = decision.reason
                     signal = None
+            elif context.get("shadow_signal"):
+                self._register_shadow_signal(context["shadow_signal"], str(context.get("reason") or context.get("market_message") or "senal bloqueada"))
+                if context.get("learning_event"):
+                    self._remember_learning_event(asset, context)
             elif context.get("learning_event"):
+                self._register_shadow_from_context(asset, context)
                 self._remember_learning_event(asset, context)
             snapshot = AnalysisSnapshot(
                 asset=asset,
@@ -267,6 +274,41 @@ class MarketEngine:
         self._last_learning_event[asset] = key
         self.learning.remember_technical_block(f"{asset}: {event}")
 
+    def _register_shadow_signal(self, signal: Signal, reason: str) -> None:
+        shadow_id = f"shadow:{signal.id}"
+        if shadow_id in self._shadow_registered_ids or shadow_id in self.performance.records:
+            return
+        self.performance.register_shadow_signal(signal, reason)
+        self._shadow_registered_ids.add(shadow_id)
+
+    def _register_shadow_from_context(self, asset: str, context: dict) -> None:
+        direction = context.get("shadow_direction")
+        if direction not in {"CALL", "PUT"}:
+            return
+        candle_ts = int(context.get("analysis_candle_ts") or datetime.now(timezone.utc).timestamp())
+        signal = Signal(
+            id=f"{asset}:{self.timeframe}:{direction}:{context.get('pattern', 'shadow')}:blocked:{candle_ts}",
+            asset=asset,
+            direction=direction,
+            score=max(1, min(10, round(float(context.get("score", 1.0))))),
+            grade="ignore",
+            strength=float(context.get("strength", 1.0)),
+            continuity=float(context.get("continuity", 1.0)),
+            exhaustion=float(context.get("exhaustion", 1.0)),
+            cci=float(context.get("cci", 0.0)),
+            main_reason=str(context.get("reason") or context.get("market_message") or "senal bloqueada"),
+            suggested_expiration=60,
+            created_at=utc_now(),
+            price=0.0,
+            timeframe=self.timeframe,
+            factor_score=int(context.get("factor_score", 0)),
+            confidence="discarded",
+            stake_amount=0,
+            pending_execution_at=datetime.fromtimestamp(candle_ts + self.timeframe, tz=timezone.utc),
+            analysis_text=str(context.get("analysis_text") or ""),
+        )
+        self._register_shadow_signal(signal, str(context.get("shadow_reason") or context.get("learning_event") or "senal bloqueada"))
+
     def _can_emit(self, signal: Signal) -> bool:
         if signal.stake_amount < 10000:
             return False
@@ -283,16 +325,19 @@ class MarketEngine:
         reason_suffixes: List[str] = []
 
         if wallet.balance < 10000:
+            context["shadow_signal"] = signal
             return self._block_signal(
                 context,
                 "SENAL DESCARTADA - saldo inferior a $10.000; modo proteccion activo",
             )
         if wallet.pause_candles_remaining > 0:
+            context["shadow_signal"] = signal
             return self._block_signal(
                 context,
                 f"PAUSA - esperando {wallet.pause_candles_remaining} vela(s) por racha perdedora",
             )
         if wallet.bankruptcies >= 2 and context.get("trend_label") == "lateral":
+            context["shadow_signal"] = signal
             return self._block_signal(
                 context,
                 "SENAL DESCARTADA - Quiebra #2 activa: no se opera mercado lateral",
@@ -306,6 +351,7 @@ class MarketEngine:
             stake = 10000
             confidence = "low"
         else:
+            context["shadow_signal"] = signal
             return self._block_signal(context, "SENAL DESCARTADA - puntuacion insuficiente")
 
         if wallet.balance < 20000 and stake > 10000:
@@ -321,6 +367,7 @@ class MarketEngine:
             confidence = "low"
             reason_suffixes.append("saldo disponible limita la apuesta")
         if stake < 10000:
+            context["shadow_signal"] = signal
             return self._block_signal(context, "SENAL DESCARTADA - saldo insuficiente para $10.000")
 
         signal.stake_amount = stake
@@ -418,7 +465,8 @@ class MarketEngine:
 
     def _signals_from_performance(self) -> List[Signal]:
         signals: List[Signal] = []
-        for record in sorted(self.performance.records.values(), key=lambda item: item.created_at)[
+        real_records = [record for record in self.performance.records.values() if not record.is_shadow]
+        for record in sorted(real_records, key=lambda item: item.created_at)[
             -self._signal_history_limit :
         ]:
             signals.append(self._signal_from_record(record))
@@ -429,11 +477,14 @@ class MarketEngine:
     def _combined_signal_history(self, limit: int = 200) -> List[Signal]:
         by_id: Dict[str, Signal] = {signal.id: signal for signal in self.signals}
         for record in self.performance.records.values():
+            if record.is_shadow:
+                continue
             by_id.setdefault(record.id, self._signal_from_record(record))
         return sorted(by_id.values(), key=lambda signal: signal.created_at)[-limit:]
 
     def _signal_history_total(self) -> int:
-        return len({signal.id for signal in self.signals} | set(self.performance.records.keys()))
+        real_record_ids = {record.id for record in self.performance.records.values() if not record.is_shadow}
+        return len({signal.id for signal in self.signals} | real_record_ids)
 
     def _trim_signal_history(self, signals: List[Signal]) -> List[Signal]:
         by_id: Dict[str, Signal] = {}

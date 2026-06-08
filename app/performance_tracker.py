@@ -47,8 +47,20 @@ class PerformanceTracker:
             created_at=signal.created_at,
             expires_at=entry_at + timedelta(seconds=signal.suggested_expiration),
             main_reason=signal.main_reason,
+            is_shadow=signal.is_shadow,
+            blocked_reason=signal.blocked_reason,
         )
         self._save()
+
+    def register_shadow_signal(self, signal: Signal, blocked_reason: str) -> None:
+        shadow = signal.model_copy(deep=True)
+        shadow.id = self._shadow_id(shadow.id)
+        shadow.stake_amount = 0
+        shadow.is_shadow = True
+        shadow.blocked_reason = blocked_reason.strip()
+        if shadow.blocked_reason and shadow.blocked_reason not in shadow.main_reason:
+            shadow.main_reason = f"{shadow.main_reason} | SOMBRA: {shadow.blocked_reason}"
+        self.register_signal(shadow)
 
     def evaluate(
         self,
@@ -67,7 +79,7 @@ class PerformanceTracker:
             entry_candle = self._entry_candle(record, usable)
             if entry_candle is None:
                 continue
-            abort_reason = abort_checker(record, usable) if abort_checker is not None else None
+            abort_reason = None if record.is_shadow else abort_checker(record, usable) if abort_checker is not None else None
             if abort_reason:
                 record.entry_price = entry_candle.open
                 record.result_price = entry_candle.open
@@ -120,15 +132,22 @@ class PerformanceTracker:
 
     def summary(self) -> PerformanceSummary:
         records = list(self.records.values())
-        resolved = [record for record in records if record.status in {"win", "loss", "push", "aborted"}]
+        real_records = [record for record in records if not record.is_shadow]
+        shadow_records = [record for record in records if record.is_shadow]
+        resolved = [record for record in real_records if record.status in {"win", "loss", "push", "aborted"}]
         traded = [record for record in resolved if record.status in {"win", "loss", "push"}]
         wins = sum(1 for record in traded if record.status == "win")
         losses = sum(1 for record in traded if record.status == "loss")
         pushes = sum(1 for record in traded if record.status == "push")
-        pending = sum(1 for record in records if record.status in {"waiting_entry", "pending"})
-        avg_score = sum(record.score for record in records) / len(records) if records else 0.0
+        pending = sum(1 for record in real_records if record.status in {"waiting_entry", "pending"})
+        avg_score = sum(record.score for record in real_records) / len(real_records) if real_records else 0.0
+        shadow_resolved = [record for record in shadow_records if record.status in {"win", "loss", "push"}]
+        shadow_wins = sum(1 for record in shadow_resolved if record.status == "win")
+        shadow_losses = sum(1 for record in shadow_resolved if record.status == "loss")
+        shadow_pushes = sum(1 for record in shadow_resolved if record.status == "push")
+        shadow_pending = sum(1 for record in shadow_records if record.status in {"waiting_entry", "pending"})
         return PerformanceSummary(
-            total=len(records),
+            total=len(real_records),
             resolved=len(traded),
             wins=wins,
             losses=losses,
@@ -136,8 +155,15 @@ class PerformanceTracker:
             pending=pending,
             win_rate=self._win_rate(wins, losses),
             avg_score=round(avg_score, 2),
-            by_market=self._buckets(records, "asset"),
-            by_direction=self._buckets(records, "direction"),
+            shadow_total=len(shadow_records),
+            shadow_resolved=len(shadow_resolved),
+            shadow_wins=shadow_wins,
+            shadow_losses=shadow_losses,
+            shadow_pushes=shadow_pushes,
+            shadow_pending=shadow_pending,
+            shadow_win_rate=self._win_rate(shadow_wins, shadow_losses),
+            by_market=self._buckets(real_records, "asset"),
+            by_direction=self._buckets(real_records, "direction"),
             recent_results=sorted(records, key=lambda record: record.created_at, reverse=True)[:60],
         )
 
@@ -363,6 +389,10 @@ class PerformanceTracker:
         if record.stake_amount < 0:
             record.stake_amount = 0
         return record
+
+    @staticmethod
+    def _shadow_id(signal_id: str) -> str:
+        return signal_id if signal_id.startswith("shadow:") else f"shadow:{signal_id}"
 
     @staticmethod
     def _normalize_asset(asset: str) -> str:

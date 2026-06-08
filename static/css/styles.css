@@ -525,6 +525,20 @@ input:focus {
   border-left: 4px solid var(--amber);
 }
 
+.result-row.shadow {
+  background: #f7f9fb;
+  border-style: dashed;
+}
+
+.result-row.shadow .result-status::before {
+  content: "SOMBRA ";
+}
+
+.shadow-reason {
+  color: #4b5d71;
+  font-weight: 700;
+}
+
 .result-status {
   border-radius: 999px;
   padding: 4px 8px;

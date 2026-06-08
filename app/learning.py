@@ -52,6 +52,10 @@ class SignalLearningSystem:
         self.resolved_examples = 0
         self.wins = 0
         self.losses = 0
+        self.real_examples = 0
+        self.shadow_examples = 0
+        self.shadow_wins = 0
+        self.shadow_losses = 0
         self.updated_at: Optional[datetime] = None
         self.allowed_signals = 0
         self.blocked_signals = 0
@@ -91,6 +95,10 @@ class SignalLearningSystem:
         self.resolved_examples = len(resolved)
         self.wins = sum(1 for record in resolved if record.status == "win")
         self.losses = sum(1 for record in resolved if record.status == "loss")
+        self.real_examples = sum(1 for record in resolved if not record.is_shadow)
+        self.shadow_examples = sum(1 for record in resolved if record.is_shadow)
+        self.shadow_wins = sum(1 for record in resolved if record.is_shadow and record.status == "win")
+        self.shadow_losses = sum(1 for record in resolved if record.is_shadow and record.status == "loss")
         self.updated_at = datetime.now(timezone.utc)
         self._signature = signature
         self._save()
@@ -177,6 +185,10 @@ class SignalLearningSystem:
             resolved_examples=self.resolved_examples,
             wins=self.wins,
             losses=self.losses,
+            real_examples=self.real_examples,
+            shadow_examples=self.shadow_examples,
+            shadow_wins=self.shadow_wins,
+            shadow_losses=self.shadow_losses,
             global_win_rate=round(self.global_win_rate * 100.0, 1),
             min_win_rate=round(self.min_win_rate, 1),
             min_history=self.min_history,
@@ -401,6 +413,10 @@ class SignalLearningSystem:
             "resolved_examples": self.resolved_examples,
             "wins": self.wins,
             "losses": self.losses,
+            "real_examples": self.real_examples,
+            "shadow_examples": self.shadow_examples,
+            "shadow_wins": self.shadow_wins,
+            "shadow_losses": self.shadow_losses,
             "global_win_rate": round(self.global_win_rate * 100.0, 4),
             "min_win_rate": self.min_win_rate,
             "min_history": self.min_history,
@@ -437,6 +453,10 @@ class SignalLearningSystem:
                 payload.get("block_recommendations", self.blocked_signals + self.exploration_signals)
             )
             self.last_decision = str(payload.get("last_decision", ""))
+            self.real_examples = int(payload.get("real_examples", 0))
+            self.shadow_examples = int(payload.get("shadow_examples", 0))
+            self.shadow_wins = int(payload.get("shadow_wins", 0))
+            self.shadow_losses = int(payload.get("shadow_losses", 0))
             self._signature = str(payload.get("signature", ""))
             updated_at = payload.get("updated_at")
             if isinstance(updated_at, str) and updated_at:
@@ -447,6 +467,10 @@ class SignalLearningSystem:
             self.exploration_signals = 0
             self.block_recommendations = 0
             self.last_decision = ""
+            self.real_examples = 0
+            self.shadow_examples = 0
+            self.shadow_wins = 0
+            self.shadow_losses = 0
             self._signature = ""
 
     @staticmethod
@@ -456,6 +480,7 @@ class SignalLearningSystem:
             digest.update(record.id.encode("utf-8", errors="ignore"))
             digest.update(str(record.status).encode("ascii"))
             digest.update(str(record.result_price).encode("ascii"))
+            digest.update(str(record.is_shadow).encode("ascii"))
         return digest.hexdigest()
 
     @staticmethod

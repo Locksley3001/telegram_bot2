@@ -35,7 +35,7 @@ class TelegramNotifier:
 
     async def send_signal(self, signal: Signal) -> None:
         async with self._state_lock:
-            if self._bot is None or signal.id in self._sent_ids:
+            if self._bot is None or signal.is_shadow or signal.id in self._sent_ids:
                 return
 
             icon = "\U0001F7E2" if signal.direction == "CALL" else "\U0001F534"
@@ -94,7 +94,9 @@ class TelegramNotifier:
         return [
             record
             for record in records
-            if record.status in {"win", "loss", "push", "aborted"} and record.id not in self._result_sent_ids
+            if not record.is_shadow
+            and record.status in {"win", "loss", "push", "aborted"}
+            and record.id not in self._result_sent_ids
         ]
 
     async def _send_outcome_unlocked(self, record: SignalOutcome) -> None:
@@ -102,7 +104,7 @@ class TelegramNotifier:
             return
         if record.id in self._result_sent_ids:
             return
-        if record.status in {"waiting_entry", "pending"}:
+        if record.is_shadow or record.status in {"waiting_entry", "pending"}:
             return
 
         text = self._outcome_text(record)

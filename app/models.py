@@ -48,6 +48,8 @@ class Signal(BaseModel):
     stake_amount: int = 0
     pending_execution_at: Optional[datetime] = None
     analysis_text: str = ""
+    is_shadow: bool = False
+    blocked_reason: str = ""
 
 
 class AnalysisSnapshot(BaseModel):
@@ -92,6 +94,8 @@ class SignalOutcome(BaseModel):
     main_reason: str
     balance_after: Optional[int] = None
     abort_reason: str = ""
+    is_shadow: bool = False
+    blocked_reason: str = ""
 
 
 class BalanceEvent(BaseModel):
@@ -142,6 +146,13 @@ class PerformanceSummary(BaseModel):
     pending: int = 0
     win_rate: float = 0.0
     avg_score: float = 0.0
+    shadow_total: int = 0
+    shadow_resolved: int = 0
+    shadow_wins: int = 0
+    shadow_losses: int = 0
+    shadow_pushes: int = 0
+    shadow_pending: int = 0
+    shadow_win_rate: float = 0.0
     by_market: List[PerformanceBucket] = Field(default_factory=list)
     by_direction: List[PerformanceBucket] = Field(default_factory=list)
     recent_results: List[SignalOutcome] = Field(default_factory=list)
@@ -152,6 +163,10 @@ class LearningSummary(BaseModel):
     resolved_examples: int = 0
     wins: int = 0
     losses: int = 0
+    real_examples: int = 0
+    shadow_examples: int = 0
+    shadow_wins: int = 0
+    shadow_losses: int = 0
     global_win_rate: float = 0.0
     min_win_rate: float = 0.0
     min_history: int = 0
