@@ -75,6 +75,43 @@ class BalanceRulesTests(unittest.TestCase):
         self.assertEqual(updated["stake_amount"], 10000)
         self.assertIn("racha de perdidas", updated["market_message"])
 
+    def test_post_target_consolidation_blocks_lateral_market(self) -> None:
+        wallet = VirtualBalanceSummary(post_target_consolidation=True, high_confidence_threshold=4)
+        engine = make_engine(wallet)
+        signal = make_signal(4)
+        context = {"factor_score": 4, "trend_label": "lateral"}
+
+        approved, updated = engine._apply_balance_rules(signal, context)
+
+        self.assertIsNone(approved)
+        self.assertEqual(updated["stake_amount"], 0)
+        self.assertIn("consolidacion post-meta", updated["reason"])
+
+    def test_post_target_consolidation_blocks_below_high_confidence(self) -> None:
+        wallet = VirtualBalanceSummary(post_target_consolidation=True, high_confidence_threshold=4)
+        engine = make_engine(wallet)
+        signal = make_signal(3)
+        context = {"factor_score": 3}
+
+        approved, updated = engine._apply_balance_rules(signal, context)
+
+        self.assertIsNone(approved)
+        self.assertEqual(updated["confidence"], "discarded")
+        self.assertIn("alta confianza 4/6", updated["reason"])
+
+    def test_post_target_consolidation_allows_high_confidence_with_capped_stake(self) -> None:
+        wallet = VirtualBalanceSummary(post_target_consolidation=True, high_confidence_threshold=4)
+        engine = make_engine(wallet)
+        signal = make_signal(4)
+        context = {"factor_score": 4}
+
+        approved, updated = engine._apply_balance_rules(signal, context)
+
+        self.assertIs(approved, signal)
+        self.assertEqual(signal.stake_amount, 10000)
+        self.assertEqual(updated["stake_amount"], 10000)
+        self.assertIn("consolidacion post-meta", updated["market_message"])
+
 
 if __name__ == "__main__":
     unittest.main()

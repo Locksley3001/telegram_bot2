@@ -124,6 +124,9 @@ class VirtualBalanceSummary(BaseModel):
     operations_since_reset: int = 0
     high_confidence_threshold: int = 4
     pause_candles_remaining: int = 0
+    post_target_consolidation: bool = False
+    post_target_consecutive_wins: int = 0
+    last_reset_reason: str = ""
     mode: str = "Proteccion normal"
     history: List[BalanceEvent] = Field(default_factory=list)
 

@@ -173,7 +173,9 @@ class PerformanceTracker:
         bankruptcies = 0
         targets_hit = 0
         consecutive_losses = 0
+        consecutive_wins = 0
         operations_since_reset = 0
+        last_reset_reason = ""
         history: List[BalanceEvent] = []
         last_loss_at: datetime | None = None
 
@@ -193,6 +195,7 @@ class PerformanceTracker:
             if record.status == "win":
                 profit = int(round(stake * float(record.payout_rate or PAYOUT_RATE)))
                 balance += profit
+                consecutive_wins += 1
                 consecutive_losses = 0
                 last_loss_at = None
                 mark = "GANANCIA"
@@ -200,6 +203,7 @@ class PerformanceTracker:
             elif record.status == "loss":
                 profit = -stake
                 balance = max(0, balance - stake)
+                consecutive_wins = 0
                 consecutive_losses += 1
                 last_loss_at = timestamp
                 mark = "PERDIDA"
@@ -226,8 +230,10 @@ class PerformanceTracker:
             if balance < CAUTIOUS_STAKE:
                 bankruptcies += 1
                 balance = INITIAL_BALANCE
+                consecutive_wins = 0
                 consecutive_losses = 0
                 operations_since_reset = 0
+                last_reset_reason = "bankruptcy"
                 history.append(
                     BalanceEvent(
                         timestamp=timestamp,
@@ -242,8 +248,10 @@ class PerformanceTracker:
             elif balance >= TARGET_BALANCE:
                 targets_hit += 1
                 balance = INITIAL_BALANCE
+                consecutive_wins = 0
                 consecutive_losses = 0
                 operations_since_reset = 0
+                last_reset_reason = "target"
                 history.append(
                     BalanceEvent(
                         timestamp=timestamp,
@@ -266,9 +274,18 @@ class PerformanceTracker:
             remaining_seconds = (last_loss_at + timedelta(seconds=pause_seconds) - utc_now()).total_seconds()
             pause_remaining = max(0, int(math.ceil(remaining_seconds / max(1, timeframe))))
 
+        post_target_consolidation = (
+            last_reset_reason == "target"
+            and operations_since_reset < 5
+            and consecutive_wins < 2
+        )
+
         mode = "Proteccion normal"
         if bankruptcies:
             mode = f"Quiebra #{bankruptcies} activo - umbral alta confianza {high_threshold}/6"
+        if post_target_consolidation:
+            remaining = max(0, 5 - operations_since_reset)
+            mode = f"Consolidacion post-meta - {remaining} operacion(es) de proteccion"
         if pause_remaining:
             mode = f"{mode}; pausa {pause_remaining} vela(s)"
         elif balance < CAUTIOUS_STAKE:
@@ -284,6 +301,9 @@ class PerformanceTracker:
             operations_since_reset=operations_since_reset,
             high_confidence_threshold=high_threshold,
             pause_candles_remaining=pause_remaining,
+            post_target_consolidation=post_target_consolidation,
+            post_target_consecutive_wins=consecutive_wins if last_reset_reason == "target" else 0,
+            last_reset_reason=last_reset_reason,
             mode=mode,
             history=history[-80:],
         )

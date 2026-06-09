@@ -78,6 +78,45 @@ class PerformanceTrackerTests(unittest.TestCase):
         self.assertEqual(wallet.history[-1].mark, "[QUIEBRA #1]")
         self.assertIn("debajo de $10.000", wallet.history[-1].note)
 
+    def test_target_reset_activates_post_target_consolidation(self) -> None:
+        tracker = PerformanceTracker(self.path)
+        tracker.records = {
+            "target": make_outcome(1, status="win", stake_amount=530000),
+        }
+
+        wallet = tracker.virtual_balance()
+
+        self.assertEqual(wallet.balance, 50000)
+        self.assertEqual(wallet.targets_hit, 1)
+        self.assertEqual(wallet.last_reset_reason, "target")
+        self.assertTrue(wallet.post_target_consolidation)
+
+    def test_post_target_consolidation_stops_after_two_consecutive_wins(self) -> None:
+        tracker = PerformanceTracker(self.path)
+        tracker.records = {
+            "target": make_outcome(1, status="win", stake_amount=530000),
+            "win-2": make_outcome(2, status="win", stake_amount=10000),
+            "win-3": make_outcome(3, status="win", stake_amount=10000),
+        }
+
+        wallet = tracker.virtual_balance()
+
+        self.assertFalse(wallet.post_target_consolidation)
+        self.assertEqual(wallet.post_target_consecutive_wins, 2)
+        self.assertEqual(wallet.operations_since_reset, 2)
+
+    def test_bankruptcy_reset_does_not_activate_post_target_consolidation(self) -> None:
+        tracker = PerformanceTracker(self.path)
+        tracker.records = {
+            "target": make_outcome(1, status="win", stake_amount=530000),
+            "loss-2": make_outcome(2, stake_amount=50000),
+        }
+
+        wallet = tracker.virtual_balance()
+
+        self.assertEqual(wallet.last_reset_reason, "bankruptcy")
+        self.assertFalse(wallet.post_target_consolidation)
+
 
 if __name__ == "__main__":
     unittest.main()
