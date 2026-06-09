@@ -70,6 +70,8 @@ const els = {
   virtualBalance: document.getElementById("virtualBalance"),
   balanceMode: document.getElementById("balanceMode"),
   balanceHistory: document.getElementById("balanceHistory"),
+  liveLearning: document.querySelector(".live-learning"),
+  metricsRow: document.querySelector(".metrics-row"),
 };
 
 const timeframeLabels = new Map([
@@ -589,6 +591,8 @@ function renderView() {
   const chartActive = state.currentView === "chart";
   els.chartView.classList.toggle("hidden", !chartActive);
   els.dashboardView.classList.toggle("hidden", chartActive);
+  if (els.liveLearning) els.liveLearning.classList.toggle("hidden", !chartActive);
+  if (els.metricsRow) els.metricsRow.classList.toggle("hidden", !chartActive);
   els.viewTabs.querySelectorAll("button[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === state.currentView);
   });

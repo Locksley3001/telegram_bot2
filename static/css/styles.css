@@ -373,12 +373,11 @@ input:focus {
 }
 
 .dashboard-view {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  gap: 12px;
+  display: block;
   padding: 14px 18px;
   background: #fbfcfd;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .hidden {
@@ -389,6 +388,7 @@ input:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
+  margin-bottom: 12px;
 }
 
 .stat-tile,
@@ -428,14 +428,29 @@ input:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  min-height: 0;
+  align-items: stretch;
+  margin-bottom: 12px;
 }
 
 .dashboard-section {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 220px;
   overflow: hidden;
+}
+
+.dashboard-columns .dashboard-section {
+  min-height: 260px;
+}
+
+.learning-section {
+  min-height: 190px;
+  margin-bottom: 12px;
+}
+
+.results-section {
+  min-height: 270px;
+  margin-bottom: 12px;
 }
 
 .dashboard-section header {
@@ -492,9 +507,10 @@ input:focus {
 .stats-list,
 .result-list {
   display: grid;
+  align-content: start;
   gap: 8px;
   padding: 10px;
-  min-height: 0;
+  min-height: 150px;
   overflow: auto;
 }
 
@@ -537,7 +553,8 @@ input:focus {
 }
 
 .result-list {
-  max-height: 260px;
+  flex: 1 1 auto;
+  max-height: none;
   overflow: auto;
 }
 
