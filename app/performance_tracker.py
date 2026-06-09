@@ -223,7 +223,7 @@ class PerformanceTracker:
                 )
             )
 
-            if balance <= 0:
+            if balance < CAUTIOUS_STAKE:
                 bankruptcies += 1
                 balance = INITIAL_BALANCE
                 consecutive_losses = 0
@@ -236,7 +236,7 @@ class PerformanceTracker:
                         result="reinicio",
                         profit=INITIAL_BALANCE,
                         balance=balance,
-                        note="Saldo llego a 0; reinicio y aprendizaje reforzado.",
+                        note="Saldo quedo por debajo de $10.000; reinicio y proteccion reforzada.",
                     )
                 )
             elif balance >= TARGET_BALANCE:
