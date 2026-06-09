@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     supabase_state_table: str = Field(default="bot_state_files", alias="SUPABASE_STATE_TABLE")
     supabase_versions_table: str = Field(default="bot_state_file_versions", alias="SUPABASE_VERSIONS_TABLE")
     supabase_bootstrap_local: bool = Field(default=False, alias="SUPABASE_BOOTSTRAP_LOCAL")
+    supabase_remote_save_interval_seconds: float = Field(default=60.0, alias="SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS")
+    supabase_versioning_enabled: bool = Field(default=False, alias="SUPABASE_VERSIONING_ENABLED")
+    supabase_version_interval_seconds: float = Field(default=3600.0, alias="SUPABASE_VERSION_INTERVAL_SECONDS")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 

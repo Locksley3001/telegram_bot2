@@ -70,6 +70,9 @@ SUPABASE_STATE_ENABLED=true
 SUPABASE_STATE_TABLE=bot_state_files
 SUPABASE_VERSIONS_TABLE=bot_state_file_versions
 SUPABASE_BOOTSTRAP_LOCAL=false
+SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS=60
+SUPABASE_VERSIONING_ENABLED=false
+SUPABASE_VERSION_INTERVAL_SECONDS=3600
 ```
 
 Telegram solo envia senales con puntuacion `>= 7`.
@@ -119,8 +122,9 @@ generan, bloquean o aprenden las senales.
 
 Con Supabase configurado, la aplicacion carga primero el estado remoto de `performance.json`,
 `learning.json`, `signals.json`, `telegram_notifications.json` y `broker_trades.json`. Cada guardado
-se conserva como espejo local en `DATA_DIR`, se sube a `bot_state_files` y se versiona en
-`bot_state_file_versions`.
+se conserva como espejo local en `DATA_DIR`; Supabase recibe solo cambios reales y como maximo una
+escritura remota por archivo cada `SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS`. Esto reduce Disk IO sin
+cambiar la logica de aprendizaje ni el formato de los JSON existentes.
 
 Variables necesarias en Render:
 
@@ -134,6 +138,10 @@ Tambien se aceptan `SUPABASE_SERVICE_KEY` o `SUPABASE_KEY` si ya las tienes crea
 
 `SUPABASE_BOOTSTRAP_LOCAL=false` evita subir datos precargados del repo cuando falta una fila remota.
 Para migrar un JSON local existente hacia Supabase, cambialo temporalmente a `true`.
+
+`SUPABASE_VERSIONING_ENABLED=false` evita llenar `bot_state_file_versions` con copias completas de los
+JSON en cada guardado. Si necesitas auditoria historica, cambialo a `true`; en ese caso
+`SUPABASE_VERSION_INTERVAL_SECONDS` controla cada cuanto se guarda una version por archivo.
 
 ## CONFIGURACION_MANUAL_REQUERIDA
 

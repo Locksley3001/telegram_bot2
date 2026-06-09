@@ -72,6 +72,9 @@ SUPABASE_STATE_ENABLED -> Activa sincronizacion de estado con Supabase. Por defe
 SUPABASE_STATE_TABLE -> Tabla de estado actual. Por defecto: bot_state_files.
 SUPABASE_VERSIONS_TABLE -> Tabla de versiones. Por defecto: bot_state_file_versions.
 SUPABASE_BOOTSTRAP_LOCAL -> Sube JSON local si no existe fila remota. Por defecto: false.
+SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS -> Intervalo minimo entre escrituras remotas por archivo. Por defecto: 60.
+SUPABASE_VERSIONING_ENABLED -> Guarda copias historicas en bot_state_file_versions. Por defecto: false para reducir Disk IO.
+SUPABASE_VERSION_INTERVAL_SECONDS -> Intervalo minimo entre versiones historicas por archivo cuando el versionado esta activo. Por defecto: 3600.
 ```
 
 ## 4. Persistencia en Render
@@ -95,6 +98,10 @@ Con esto se conservan:
 Si usas Supabase, el estado remoto tiene prioridad sobre esos archivos locales. El disco persistente
 sigue siendo util como espejo y fallback, pero el aprendizaje arranca desde las filas remotas de
 `bot_state_files` cuando Supabase responde.
+
+Para evitar alertas de Disk IO en Supabase, deja `SUPABASE_VERSIONING_ENABLED=false` y usa
+`SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS=60` o mas. El bot seguira leyendo los JSON remotos anteriores,
+pero no reescribira el mismo contenido ni creara una fila historica por cada decision del aprendizaje.
 
 Si no montas disco persistente, Render puede perder esos JSON al redeplegar y el aprendizaje puede reiniciar.
 En el plan gratis no configures `DATA_DIR=/var/data`, porque esa ruta no sera escribible sin disco. Usa `DATA_DIR=data` o elimina la variable.

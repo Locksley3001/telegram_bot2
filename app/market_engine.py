@@ -43,6 +43,9 @@ class MarketEngine:
             state_table=settings.supabase_state_table,
             versions_table=settings.supabase_versions_table,
             bootstrap_local=settings.supabase_bootstrap_local,
+            remote_save_interval_seconds=settings.supabase_remote_save_interval_seconds,
+            versioning_enabled=settings.supabase_versioning_enabled,
+            version_interval_seconds=settings.supabase_version_interval_seconds,
         )
         self._signal_history_limit = max(1, min(500, settings.signal_history_limit))
         self._api_signal_limit = max(1, settings.api_signal_limit)
@@ -209,6 +212,7 @@ class MarketEngine:
                 except Exception as reconnect_exc:
                     self.last_error = str(reconnect_exc)
                     self.broker_status = "sin conexion al broker"
+            self.storage.flush_pending()
             await asyncio.sleep(self.settings.poll_interval_seconds)
 
     async def _ensure_connection(self) -> None:

@@ -160,6 +160,12 @@ class SupabaseSyncSummary(BaseModel):
     versions_table: str = "bot_state_file_versions"
     remote_first: bool = True
     bootstrap_local: bool = False
+    remote_save_interval_seconds: float = 60.0
+    versioning_enabled: bool = False
+    version_interval_seconds: float = 3600.0
+    pending_remote_writes: List[str] = Field(default_factory=list)
+    skipped_remote_saves: int = 0
+    skipped_version_saves: int = 0
     last_error: str = ""
     last_sync_at: Optional[datetime] = None
 
