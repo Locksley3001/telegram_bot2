@@ -243,7 +243,8 @@ class MarketEngine:
                 self.learning.rebuild(self.performance.records.values())
             pending_outcomes = self.notifier.pending_outcomes(self.performance.records.values())
             if pending_outcomes:
-                await self.notifier.send_outcomes(pending_outcomes)
+                wallet = self.performance.virtual_balance(timeframe=self.timeframe)
+                await self.notifier.send_outcomes(pending_outcomes, virtual_balance=wallet.balance)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
             if signal is not None:
                 signal, context = self._apply_balance_rules(signal, context)

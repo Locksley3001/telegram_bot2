@@ -68,16 +68,16 @@ class TelegramNotifier:
                 self.last_error = "No se pudo enviar la senal por Telegram."
                 LOGGER.exception("No se pudo enviar la senal por Telegram")
 
-    async def send_outcomes(self, records: List[SignalOutcome]) -> None:
+    async def send_outcomes(self, records: List[SignalOutcome], *, virtual_balance: Optional[int] = None) -> None:
         async with self._state_lock:
             for record in sorted(records, key=lambda item: item.created_at):
                 await self._send_outcome_unlocked(record)
-            await self._send_due_summaries()
+            await self._send_due_summaries(virtual_balance=virtual_balance)
 
-    async def send_outcome(self, record: SignalOutcome) -> None:
+    async def send_outcome(self, record: SignalOutcome, *, virtual_balance: Optional[int] = None) -> None:
         async with self._state_lock:
             await self._send_outcome_unlocked(record)
-            await self._send_due_summaries()
+            await self._send_due_summaries(virtual_balance=virtual_balance)
 
     def remember_signals(self, signal_ids: Iterable[str]) -> None:
         changed = False
@@ -155,12 +155,12 @@ class TelegramNotifier:
         else:
             await asyncio.to_thread(send_method, **kwargs)
 
-    async def _send_due_summaries(self) -> None:
+    async def _send_due_summaries(self, *, virtual_balance: Optional[int] = None) -> None:
         if self._bot is None:
             return
         while len(self._summary_pending) >= SUMMARY_BATCH_SIZE:
             batch = self._summary_pending[:SUMMARY_BATCH_SIZE]
-            text = self._summary_text(batch, self._summaries_sent + 1)
+            text = self._summary_text(batch, self._summaries_sent + 1, virtual_balance=virtual_balance)
             try:
                 await self._send_message(chat_id=self.chat_id, text=text)
                 self._summaries_sent += 1
@@ -191,7 +191,12 @@ class TelegramNotifier:
         )
 
     @staticmethod
-    def _summary_text(batch: List[Dict[str, object]], batch_number: int) -> str:
+    def _summary_text(
+        batch: List[Dict[str, object]],
+        batch_number: int,
+        *,
+        virtual_balance: Optional[int] = None,
+    ) -> str:
         wins = sum(1 for item in batch if item.get("status") == "win")
         losses = sum(1 for item in batch if item.get("status") == "loss")
         pushes = sum(1 for item in batch if item.get("status") == "push")
@@ -200,8 +205,10 @@ class TelegramNotifier:
             f"Ganadas: {wins}",
             f"Perdidas: {losses}",
             f"Empates: {pushes}",
-            "",
         ]
+        if virtual_balance is not None:
+            lines.append(f"Saldo virtual: {TelegramNotifier._format_money(virtual_balance)}")
+        lines.append("")
         for index, item in enumerate(batch, start=1):
             label = TelegramNotifier._status_label(str(item.get("status", "")))
             lines.append(
@@ -239,6 +246,10 @@ class TelegramNotifier:
     @staticmethod
     def _format_price(value: float) -> str:
         return f"{value:.4f}" if abs(value) > 10 else f"{value:.6f}"
+
+    @staticmethod
+    def _format_money(value: int) -> str:
+        return f"${int(value):,}".replace(",", ".")
 
     def _load_state(self) -> None:
         if self.state_path is None:
