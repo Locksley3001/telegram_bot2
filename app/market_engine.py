@@ -381,6 +381,17 @@ class MarketEngine:
             )
 
         factor_score = int(context.get("factor_score", signal.factor_score))
+        loss_streak_caution = wallet.consecutive_losses >= 2
+        if loss_streak_caution and factor_score < wallet.high_confidence_threshold:
+            context["shadow_signal"] = signal
+            return self._block_signal(
+                context,
+                (
+                    "SENAL DESCARTADA - racha de perdidas activa: "
+                    f"se exige alta confianza {wallet.high_confidence_threshold}/6"
+                ),
+            )
+
         if factor_score >= wallet.high_confidence_threshold:
             stake = 20000
             confidence = "high"
@@ -395,6 +406,10 @@ class MarketEngine:
             stake = 10000
             confidence = "low"
             reason_suffixes.append("saldo bajo: apuesta limitada a $10.000")
+        if loss_streak_caution and stake > 10000:
+            stake = 10000
+            confidence = "low"
+            reason_suffixes.append("racha de perdidas: recuperacion con $10.000")
         if wallet.bankruptcies >= 4 and wallet.operations_since_reset < 10 and stake > 10000:
             stake = 10000
             confidence = "low"
