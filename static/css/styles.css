@@ -452,6 +452,37 @@ input:focus {
   font-size: 14px;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.section-action {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.section-action.active {
+  border-color: rgba(22, 131, 90, 0.35);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.section-action:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .learning-section header span {
   color: var(--muted);
   font-size: 12px;

@@ -57,7 +57,9 @@ const els = {
   brokerTradesPlaced: document.getElementById("brokerTradesPlaced"),
   brokerTradesFailed: document.getElementById("brokerTradesFailed"),
   brokerTradingMode: document.getElementById("brokerTradingMode"),
+  brokerConnectButton: document.getElementById("brokerConnectButton"),
   brokerTradeList: document.getElementById("brokerTradeList"),
+  supabaseStatus: document.getElementById("supabaseStatus"),
   learningStatus: document.getElementById("learningStatus"),
   learningPatterns: document.getElementById("learningPatterns"),
   marketStats: document.getElementById("marketStats"),
@@ -349,6 +351,7 @@ function renderDashboard() {
   renderBuckets(els.directionStats, perf.by_direction || [], "Sin operaciones evaluadas por dirección");
   renderResults(perf.recent_results || []);
   renderBrokerTrades(state.data.broker_trading || {});
+  renderSupabase(state.data.supabase || {});
 }
 
 function renderLearning(learning) {
@@ -513,13 +516,20 @@ function renderBrokerTrades(brokerTrading) {
   els.brokerTradingEnabled.style.color = enabled ? "var(--green)" : "var(--muted)";
   els.brokerTradesPlaced.textContent = String(brokerTrading.placed || 0);
   els.brokerTradesFailed.textContent = String(brokerTrading.failed || 0);
+  if (els.brokerConnectButton) {
+    els.brokerConnectButton.textContent = enabled ? "Desconectar broker" : "Conectar broker";
+    els.brokerConnectButton.classList.toggle("active", enabled);
+    els.brokerConnectButton.title = enabled
+      ? "Apagar envio de nuevas operaciones al broker"
+      : "Duplicar en el broker las operaciones aprobadas por el saldo virtual";
+  }
   els.brokerTradingMode.textContent = `${brokerTrading.balance_mode || "PRACTICE"} Â· ventana ${Number(brokerTrading.entry_window_seconds || 0).toFixed(1)}s`;
   els.brokerTradeList.innerHTML = "";
   const trades = brokerTrading.recent_trades || [];
   if (!trades.length) {
     const empty = document.createElement("p");
     empty.className = "market-meta";
-    empty.textContent = enabled ? "Esperando entradas validadas por el saldo virtual." : "Trading real apagado por variable de entorno.";
+    empty.textContent = enabled ? "Esperando entradas validadas por el saldo virtual." : "Broker real desconectado; sigue operando solo el saldo virtual.";
     els.brokerTradeList.appendChild(empty);
     return;
   }
@@ -540,6 +550,14 @@ function renderBrokerTrades(brokerTrading) {
     `;
     els.brokerTradeList.appendChild(row);
   });
+}
+
+function renderSupabase(supabase) {
+  if (!els.supabaseStatus) return;
+  const active = Boolean(supabase.enabled) && Boolean(supabase.connected);
+  els.supabaseStatus.textContent = active ? "ON" : "OFF";
+  els.supabaseStatus.style.color = active ? "var(--green)" : "var(--muted)";
+  els.supabaseStatus.title = supabase.last_error || (supabase.enabled ? "Supabase configurado" : "Supabase no configurado");
 }
 
 function statusLabel(status) {
@@ -717,6 +735,9 @@ els.addMarketForm.addEventListener("submit", (event) => {
 els.marketSearch.addEventListener("input", renderMarkets);
 els.telegramTestButton.addEventListener("click", testTelegram);
 els.soundTestButton.addEventListener("click", testSound);
+if (els.brokerConnectButton) {
+  els.brokerConnectButton.addEventListener("click", toggleBrokerTrading);
+}
 
 els.viewTabs.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-view]");
@@ -851,6 +872,27 @@ async function testTelegram() {
     setTestFeedback(`Error Telegram: ${error.message || String(error)}`, true);
   } finally {
     els.telegramTestButton.disabled = false;
+  }
+}
+
+async function toggleBrokerTrading() {
+  if (!state.data || !els.brokerConnectButton) return;
+  const current = Boolean(state.data.broker_trading?.enabled);
+  els.brokerConnectButton.disabled = true;
+  setTestFeedback(current ? "Desconectando broker..." : "Conectando broker...", false);
+  try {
+    const data = await apiRequest("/api/broker/trading", {
+      method: "POST",
+      body: JSON.stringify({ enabled: !current }),
+    });
+    state.data = data;
+    ensureSelectedAsset();
+    render();
+    setTestFeedback(!current ? "Broker real conectado." : "Broker real desconectado.", false);
+  } catch (error) {
+    setTestFeedback(`Error broker: ${error.message || String(error)}`, true);
+  } finally {
+    els.brokerConnectButton.disabled = false;
   }
 }
 

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 from app.broker_interface import BrokerInterface
 from app.models import BrokerTrade, BrokerTradingSummary, SignalOutcome, utc_now
+from app.state_storage import StateStorage
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +20,10 @@ class BrokerTradeExecutor:
         enabled: bool,
         balance_mode: str,
         entry_window_seconds: float = 3.0,
+        storage: Optional[StateStorage] = None,
     ) -> None:
         self.path = path
+        self.storage = storage
         self.enabled = enabled
         self.balance_mode = balance_mode.strip().upper() or "PRACTICE"
         self.entry_window_seconds = max(0.5, entry_window_seconds)
@@ -32,6 +33,11 @@ class BrokerTradeExecutor:
         self._loaded_ok = True
         self._load()
 
+    async def set_enabled(self, enabled: bool) -> None:
+        async with self._lock:
+            self.enabled = enabled
+            self._save()
+
     async def execute_due(
         self,
         asset: str,
@@ -39,6 +45,8 @@ class BrokerTradeExecutor:
         broker: BrokerInterface,
     ) -> List[BrokerTrade]:
         if not self.enabled:
+            return []
+        if getattr(broker, "connected", True) is False:
             return []
 
         async with self._lock:
@@ -141,10 +149,33 @@ class BrokerTradeExecutor:
         )
 
     def _load(self) -> None:
+        if self.storage is not None:
+            payload = self.storage.load_json(self.path.name, self.path)
+            if payload is None:
+                return
+            try:
+                if "enabled" in payload:
+                    self.enabled = bool(payload.get("enabled"))
+                self.trades = {
+                    trade.signal_id: trade
+                    for trade in (
+                        BrokerTrade.model_validate(item)
+                        for item in payload.get("trades", [])
+                        if isinstance(item, dict) and item.get("signal_id")
+                    )
+                }
+                return
+            except Exception:
+                self._loaded_ok = False
+                self.trades = {}
+                return
+
         if not self.path.exists():
             return
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload = StateStorage._load_local(self.path) or {}
+            if "enabled" in payload:
+                self.enabled = bool(payload.get("enabled"))
             self.trades = {
                 trade.signal_id: trade
                 for trade in (
@@ -155,38 +186,21 @@ class BrokerTradeExecutor:
             }
         except Exception:
             self._loaded_ok = False
-            backup = self.path.with_suffix(f"{self.path.suffix}.bak")
-            if backup.exists():
-                try:
-                    payload = json.loads(backup.read_text(encoding="utf-8"))
-                    self.trades = {
-                        trade.signal_id: trade
-                        for trade in (
-                            BrokerTrade.model_validate(item)
-                            for item in payload.get("trades", [])
-                            if isinstance(item, dict) and item.get("signal_id")
-                        )
-                    }
-                    self._loaded_ok = True
-                except Exception:
-                    self.trades = {}
-            else:
-                self.trades = {}
+            self.trades = {}
 
     def _save(self) -> None:
         if not self._loaded_ok and self.path.exists():
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
+            "enabled": self.enabled,
+            "balance_mode": self.balance_mode,
+            "entry_window_seconds": self.entry_window_seconds,
             "trades": [
                 trade.model_dump(mode="json")
                 for trade in sorted(self.trades.values(), key=lambda item: item.requested_at)
             ]
         }
-        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
-        temp_path = self.path.with_suffix(f"{self.path.suffix}.tmp")
-        backup_path = self.path.with_suffix(f"{self.path.suffix}.bak")
-        temp_path.write_text(encoded, encoding="utf-8")
-        if self.path.exists():
-            backup_path.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
-        temp_path.replace(self.path)
+        if self.storage is not None:
+            self.storage.save_json(self.path.name, self.path, payload)
+        else:
+            StateStorage._write_local(self.path, payload)

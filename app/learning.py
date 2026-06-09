@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 from app.models import LearningSummary, Signal, SignalOutcome
+from app.state_storage import StateStorage
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class SignalLearningSystem:
     def __init__(
         self,
         path: Path,
+        storage: Optional[StateStorage] = None,
         *,
         enabled: bool = True,
         min_history: int = 30,
@@ -42,6 +43,7 @@ class SignalLearningSystem:
         exploration_interval: int = 20,
     ) -> None:
         self.path = path
+        self.storage = storage
         self.enabled = enabled
         self.min_history = max(1, min_history)
         self.min_win_rate = max(1.0, min(95.0, min_win_rate))
@@ -406,7 +408,6 @@ class SignalLearningSystem:
         return LearningDecision(True, blocked.estimated_win_rate, blocked.evidence_samples, reason)
 
     def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": 1,
             "enabled": self.enabled,
@@ -433,19 +434,21 @@ class SignalLearningSystem:
             "rules": self.rules,
             "risky_patterns": self._risky_patterns(),
         }
-        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
-        temp_path = self.path.with_suffix(f"{self.path.suffix}.tmp")
-        backup_path = self.path.with_suffix(f"{self.path.suffix}.bak")
-        temp_path.write_text(encoded, encoding="utf-8")
-        if self.path.exists():
-            backup_path.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
-        temp_path.replace(self.path)
+        if self.storage is not None:
+            self.storage.save_json(self.path.name, self.path, payload)
+        else:
+            StateStorage._write_local(self.path, payload)
 
     def _load_decision_counters(self) -> None:
-        if not self.path.exists():
+        if self.storage is not None:
+            payload = self.storage.load_json(self.path.name, self.path)
+            if payload is None:
+                return
+        elif not self.path.exists():
             return
+        else:
+            payload = StateStorage._load_local(self.path) or {}
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
             self.allowed_signals = int(payload.get("allowed_signals", 0))
             self.blocked_signals = int(payload.get("blocked_signals", 0))
             self.exploration_signals = int(payload.get("exploration_signals", 0))

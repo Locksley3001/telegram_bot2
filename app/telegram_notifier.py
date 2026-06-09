@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -10,16 +9,24 @@ from typing import Dict, Iterable, List, Optional, Set
 from telegram import Bot
 
 from app.models import Signal, SignalOutcome
+from app.state_storage import StateStorage
 
 LOGGER = logging.getLogger(__name__)
 SUMMARY_BATCH_SIZE = 5
 
 
 class TelegramNotifier:
-    def __init__(self, token: str, chat_id: str, state_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        token: str,
+        chat_id: str,
+        state_path: Optional[Path] = None,
+        storage: Optional[StateStorage] = None,
+    ) -> None:
         self.token = token
         self.chat_id = chat_id
         self.state_path = state_path
+        self.storage = storage
         self._bot: Optional[Bot] = Bot(token=token) if token and chat_id else None
         self._sent_ids: Set[str] = set()
         self._result_sent_ids: Set[str] = set()
@@ -234,10 +241,17 @@ class TelegramNotifier:
         return f"{value:.4f}" if abs(value) > 10 else f"{value:.6f}"
 
     def _load_state(self) -> None:
-        if self.state_path is None or not self.state_path.exists():
+        if self.state_path is None:
             return
+        if self.storage is not None:
+            payload = self.storage.load_json(self.state_path.name, self.state_path)
+            if payload is None:
+                return
+        elif not self.state_path.exists():
+            return
+        else:
+            payload = StateStorage._load_local(self.state_path) or {}
         try:
-            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
             self._sent_ids = set(str(item) for item in payload.get("signal_sent_ids", []))
             self._result_sent_ids = set(str(item) for item in payload.get("result_sent_ids", []))
             self._summary_pending = [
@@ -250,17 +264,13 @@ class TelegramNotifier:
     def _save_state(self) -> None:
         if self.state_path is None:
             return
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "signal_sent_ids": sorted(self._sent_ids),
             "result_sent_ids": sorted(self._result_sent_ids),
             "summary_pending": self._summary_pending,
             "summaries_sent": self._summaries_sent,
         }
-        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
-        temp_path = self.state_path.with_suffix(f"{self.state_path.suffix}.tmp")
-        backup_path = self.state_path.with_suffix(f"{self.state_path.suffix}.bak")
-        temp_path.write_text(encoded, encoding="utf-8")
-        if self.state_path.exists():
-            backup_path.write_text(self.state_path.read_text(encoding="utf-8"), encoding="utf-8")
-        temp_path.replace(self.state_path)
+        if self.storage is not None:
+            self.storage.save_json(self.state_path.name, self.state_path, payload)
+        else:
+            StateStorage._write_local(self.state_path, payload)

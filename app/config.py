@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     learning_exploration_interval: int = Field(default=20, alias="LEARNING_EXPLORATION_INTERVAL")
     broker_trading_enabled: bool = Field(default=False, alias="BROKER_TRADING_ENABLED")
     broker_trade_entry_window_seconds: float = Field(default=3.0, alias="BROKER_TRADE_ENTRY_WINDOW_SECONDS")
+    supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+    supabase_service_key: str = Field(default="", alias="SUPABASE_SERVICE_KEY")
+    supabase_generic_key: str = Field(default="", alias="SUPABASE_KEY")
+    supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
+    supabase_state_enabled: bool = Field(default=True, alias="SUPABASE_STATE_ENABLED")
+    supabase_state_table: str = Field(default="bot_state_files", alias="SUPABASE_STATE_TABLE")
+    supabase_versions_table: str = Field(default="bot_state_file_versions", alias="SUPABASE_VERSIONS_TABLE")
+    supabase_bootstrap_local: bool = Field(default=False, alias="SUPABASE_BOOTSTRAP_LOCAL")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
@@ -56,6 +65,15 @@ class Settings(BaseSettings):
     @property
     def market_list(self) -> List[str]:
         return [market.strip() for market in self.markets.split(",") if market.strip()]
+
+    @property
+    def supabase_key(self) -> str:
+        return (
+            self.supabase_service_role_key
+            or self.supabase_service_key
+            or self.supabase_generic_key
+            or self.supabase_anon_key
+        )
 
 
 @lru_cache

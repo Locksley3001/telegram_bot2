@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional
 
 from app.models import BalanceEvent, Candle, PerformanceBucket, PerformanceSummary, Signal, SignalOutcome, VirtualBalanceSummary, utc_now
+from app.state_storage import StateStorage
 
 
 INITIAL_BALANCE = 50000
@@ -17,8 +17,9 @@ PAYOUT_RATE = 0.85
 
 
 class PerformanceTracker:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, storage: Optional[StateStorage] = None) -> None:
         self.path = path
+        self.storage = storage
         self.records: Dict[str, SignalOutcome] = {}
         self._loaded_ok = True
         self._load()
@@ -288,10 +289,27 @@ class PerformanceTracker:
         )
 
     def _load(self) -> None:
+        if self.storage is not None:
+            payload = self.storage.load_json(self.path.name, self.path)
+            if payload is None:
+                return
+            try:
+                records = payload.get("records", [])
+                self.records = {
+                    record["id"]: self._normalize_record(SignalOutcome.model_validate(record))
+                    for record in records
+                    if isinstance(record, dict) and record.get("id")
+                }
+                return
+            except Exception:
+                self._loaded_ok = False
+                self.records = {}
+                return
+
         if not self.path.exists():
             return
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload = StateStorage._load_local(self.path) or {}
             records = payload.get("records", [])
             self.records = {
                 record["id"]: self._normalize_record(SignalOutcome.model_validate(record))
@@ -301,39 +319,21 @@ class PerformanceTracker:
             self._save()
         except Exception:
             self._loaded_ok = False
-            backup = self.path.with_suffix(f"{self.path.suffix}.bak")
-            if backup.exists():
-                try:
-                    payload = json.loads(backup.read_text(encoding="utf-8"))
-                    records = payload.get("records", [])
-                    self.records = {
-                        record["id"]: self._normalize_record(SignalOutcome.model_validate(record))
-                        for record in records
-                        if isinstance(record, dict) and record.get("id")
-                    }
-                    self._loaded_ok = True
-                    return
-                except Exception:
-                    pass
             self.records = {}
 
     def _save(self) -> None:
         if not self._loaded_ok and self.path.exists():
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "records": [
                 record.model_dump(mode="json")
                 for record in sorted(self.records.values(), key=lambda item: item.created_at)
             ]
         }
-        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
-        temp_path = self.path.with_suffix(f"{self.path.suffix}.tmp")
-        backup_path = self.path.with_suffix(f"{self.path.suffix}.bak")
-        temp_path.write_text(encoded, encoding="utf-8")
-        if self.path.exists():
-            backup_path.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
-        temp_path.replace(self.path)
+        if self.storage is not None:
+            self.storage.save_json(self.path.name, self.path, payload)
+        else:
+            StateStorage._write_local(self.path, payload)
 
     @staticmethod
     def _entry_candle(record: SignalOutcome, candles: List[Candle]) -> Candle | None:

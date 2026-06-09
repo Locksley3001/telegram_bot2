@@ -153,6 +153,17 @@ class BrokerTradingSummary(BaseModel):
     recent_trades: List[BrokerTrade] = Field(default_factory=list)
 
 
+class SupabaseSyncSummary(BaseModel):
+    enabled: bool = False
+    connected: bool = False
+    state_table: str = "bot_state_files"
+    versions_table: str = "bot_state_file_versions"
+    remote_first: bool = True
+    bootstrap_local: bool = False
+    last_error: str = ""
+    last_sync_at: Optional[datetime] = None
+
+
 class PerformanceBucket(BaseModel):
     name: str
     total: int = 0
@@ -219,6 +230,7 @@ class EngineState(BaseModel):
     learning: LearningSummary = Field(default_factory=LearningSummary)
     virtual_balance: VirtualBalanceSummary = Field(default_factory=VirtualBalanceSummary)
     broker_trading: BrokerTradingSummary = Field(default_factory=BrokerTradingSummary)
+    supabase: SupabaseSyncSummary = Field(default_factory=SupabaseSyncSummary)
     last_error: Optional[str] = None
 
 

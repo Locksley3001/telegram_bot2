@@ -62,6 +62,14 @@ LEARNING_MIN_SIMILARITY_SAMPLES=4
 LEARNING_EXPLORATION_INTERVAL=20
 BROKER_TRADING_ENABLED=false
 BROKER_TRADE_ENTRY_WINDOW_SECONDS=3
+SUPABASE_URL=https://kwbqjullmtrankjpmwfs.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SERVICE_KEY=
+SUPABASE_KEY=
+SUPABASE_STATE_ENABLED=true
+SUPABASE_STATE_TABLE=bot_state_files
+SUPABASE_VERSIONS_TABLE=bot_state_file_versions
+SUPABASE_BOOTSTRAP_LOCAL=false
 ```
 
 Telegram solo envia senales con puntuacion `>= 7`.
@@ -100,6 +108,30 @@ el saldo virtual. Las operaciones abortadas no se envian al broker.
 para enviar la orden; por defecto son `3`. Los intentos reales se guardan en
 `DATA_DIR/broker_trades.json` y se pueden ver en el dashboard, en la seccion **Broker en vivo**, o en
 `/api/broker/trades`.
+
+El dashboard permite conectar/desconectar el envio al broker sin redeploy. El boton solo cambia la
+duplicacion real de las operaciones aprobadas por el saldo virtual; no cambia la forma en que se
+generan, bloquean o aprenden las senales.
+
+## Supabase
+
+Con Supabase configurado, la aplicacion carga primero el estado remoto de `performance.json`,
+`learning.json`, `signals.json`, `telegram_notifications.json` y `broker_trades.json`. Cada guardado
+se conserva como espejo local en `DATA_DIR`, se sube a `bot_state_files` y se versiona en
+`bot_state_file_versions`.
+
+Variables necesarias en Render:
+
+```env
+SUPABASE_URL=https://kwbqjullmtrankjpmwfs.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+SUPABASE_STATE_ENABLED=true
+```
+
+Tambien se aceptan `SUPABASE_SERVICE_KEY` o `SUPABASE_KEY` si ya las tienes creadas con ese nombre.
+
+`SUPABASE_BOOTSTRAP_LOCAL=false` evita subir datos precargados del repo cuando falta una fila remota.
+Para migrar un JSON local existente hacia Supabase, cambialo temporalmente a `true`.
 
 ## CONFIGURACION_MANUAL_REQUERIDA
 

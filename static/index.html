@@ -156,6 +156,10 @@
               <span>Fallos broker</span>
               <strong id="brokerTradesFailed">0</strong>
             </article>
+            <article class="stat-tile">
+              <span>Supabase</span>
+              <strong id="supabaseStatus">OFF</strong>
+            </article>
           </div>
 
           <div class="dashboard-columns">
@@ -192,7 +196,10 @@
           <section class="dashboard-section results-section">
             <header>
               <h3>Broker en vivo</h3>
-              <span id="brokerTradingMode">PRACTICE</span>
+              <div class="section-actions">
+                <span id="brokerTradingMode">PRACTICE</span>
+                <button id="brokerConnectButton" class="section-action" type="button">Conectar broker</button>
+              </div>
             </header>
             <div id="brokerTradeList" class="result-list"></div>
           </section>

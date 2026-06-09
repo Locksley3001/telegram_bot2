@@ -65,6 +65,13 @@ LEARNING_MIN_WIN_RATE -> Porcentaje minimo esperado para permitir una senal. Por
 LEARNING_EXPLORATION_INTERVAL -> Permite una senal fuerte cada N bloqueos para seguir aprendiendo. Por defecto: 20. Usa 0 para desactivarlo.
 BROKER_TRADING_ENABLED -> Envia operaciones al broker cuando una senal pasa a pending. Por defecto: false.
 BROKER_TRADE_ENTRY_WINDOW_SECONDS -> Ventana maxima para entrar despues de abrir la vela. Por defecto: 3.
+SUPABASE_URL -> URL del proyecto Supabase. Ejemplo: https://kwbqjullmtrankjpmwfs.supabase.co
+SUPABASE_SERVICE_ROLE_KEY -> Clave service_role del proyecto Supabase para leer/escribir el estado.
+SUPABASE_SERVICE_KEY / SUPABASE_KEY -> Alternativas aceptadas si ya tienes la clave con otro nombre.
+SUPABASE_STATE_ENABLED -> Activa sincronizacion de estado con Supabase. Por defecto: true si hay URL y key.
+SUPABASE_STATE_TABLE -> Tabla de estado actual. Por defecto: bot_state_files.
+SUPABASE_VERSIONS_TABLE -> Tabla de versiones. Por defecto: bot_state_file_versions.
+SUPABASE_BOOTSTRAP_LOCAL -> Sube JSON local si no existe fila remota. Por defecto: false.
 ```
 
 ## 4. Persistencia en Render
@@ -84,6 +91,10 @@ Con esto se conservan:
 - `/var/data/signals.json`: historial de senales.
 - `/var/data/telegram_notifications.json`: senales/resultados/resumenes ya notificados.
 - `/var/data/broker_trades.json`: intentos de operaciones enviados a IQ Option.
+
+Si usas Supabase, el estado remoto tiene prioridad sobre esos archivos locales. El disco persistente
+sigue siendo util como espejo y fallback, pero el aprendizaje arranca desde las filas remotas de
+`bot_state_files` cuando Supabase responde.
 
 Si no montas disco persistente, Render puede perder esos JSON al redeplegar y el aprendizaje puede reiniciar.
 En el plan gratis no configures `DATA_DIR=/var/data`, porque esa ruta no sera escribible sin disco. Usa `DATA_DIR=data` o elimina la variable.

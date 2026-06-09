@@ -65,6 +65,9 @@ async def health() -> dict:
         "iq_option_2fa_configured": bool(settings.iq_option_2fa_code),
         "broker_trading_enabled": settings.broker_trading_enabled,
         "broker_trade_entry_window_seconds": settings.broker_trade_entry_window_seconds,
+        "supabase_enabled": engine.storage.enabled,
+        "supabase_connected": engine.storage.connected,
+        "supabase_last_error": engine.storage.last_error,
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
         "telegram_last_error": engine.notifier.last_error,
         "data_dir": str(engine._data_dir),
@@ -87,6 +90,11 @@ async def get_performance():
 @app.get("/api/broker/trades")
 async def get_broker_trades():
     return engine.trade_executor.summary(limit=100)
+
+
+@app.post("/api/broker/trading")
+async def set_broker_trading(payload: EnabledPayload):
+    return await engine.set_broker_trading_enabled(payload.enabled)
 
 
 @app.post("/api/telegram/test")

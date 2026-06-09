@@ -12,6 +12,7 @@ from app.models import SignalOutcome, utc_now
 class FakeBroker:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, int, int]] = []
+        self.connected = True
 
     async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
         self.calls.append((asset, direction, amount, expiration_seconds))
@@ -102,6 +103,26 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(trades, [])
         self.assertEqual(broker.calls, [])
+
+    async def test_disconnected_broker_does_not_mark_record_failed(self) -> None:
+        broker = FakeBroker()
+        broker.connected = False
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
+        record = make_record()
+
+        trades = await executor.execute_due("EURUSD-OTC", [record], broker)
+
+        self.assertEqual(trades, [])
+        self.assertEqual(executor.trades, {})
+        self.assertEqual(broker.calls, [])
+
+    async def test_set_enabled_persists_runtime_state(self) -> None:
+        executor = BrokerTradeExecutor(self.path, enabled=False, balance_mode="PRACTICE")
+
+        await executor.set_enabled(True)
+        restored = BrokerTradeExecutor(self.path, enabled=False, balance_mode="PRACTICE")
+
+        self.assertTrue(restored.enabled)
 
 
 if __name__ == "__main__":

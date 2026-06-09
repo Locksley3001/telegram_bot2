@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import tempfile
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from app.iq_option_broker import IQOptionBroker
 from app.learning import SignalLearningSystem
 from app.models import AnalysisSnapshot, EngineState, Signal, SignalOutcome, utc_now
 from app.performance_tracker import PerformanceTracker
+from app.state_storage import StateStorage
 from app.telegram_notifier import TelegramNotifier
 
 LOGGER = logging.getLogger(__name__)
@@ -35,23 +35,35 @@ class MarketEngine:
             stream_max_candles=settings.candle_count,
         )
         self._data_dir = self._data_path(settings)
+        self.storage = StateStorage(
+            data_dir=self._data_dir,
+            supabase_url=settings.supabase_url,
+            supabase_key=settings.supabase_key,
+            enabled=settings.supabase_state_enabled,
+            state_table=settings.supabase_state_table,
+            versions_table=settings.supabase_versions_table,
+            bootstrap_local=settings.supabase_bootstrap_local,
+        )
         self._signal_history_limit = max(1, settings.signal_history_limit)
         self._api_signal_limit = max(1, settings.api_signal_limit)
         self.notifier = TelegramNotifier(
             settings.telegram_bot_token,
             settings.telegram_chat_id,
             self._data_dir / "telegram_notifications.json",
+            storage=self.storage,
         )
         self.analyzer = PriceActionAnalyzer()
-        self.performance = PerformanceTracker(self._data_dir / "performance.json")
+        self.performance = PerformanceTracker(self._data_dir / "performance.json", storage=self.storage)
         self.trade_executor = BrokerTradeExecutor(
             self._data_dir / "broker_trades.json",
             enabled=settings.broker_trading_enabled,
             balance_mode=settings.iq_option_balance_mode,
             entry_window_seconds=settings.broker_trade_entry_window_seconds,
+            storage=self.storage,
         )
         self.learning = SignalLearningSystem(
             self._data_dir / "learning.json",
+            storage=self.storage,
             enabled=settings.learning_enabled,
             min_history=settings.learning_min_history,
             min_win_rate=settings.learning_min_win_rate,
@@ -164,8 +176,18 @@ class MarketEngine:
             learning=self.learning.summary(),
             virtual_balance=self.performance.virtual_balance(timeframe=self.timeframe),
             broker_trading=self.trade_executor.summary(),
+            supabase=self.storage.summary(),
             last_error=self.last_error,
         )
+
+    async def set_broker_trading_enabled(self, enabled: bool) -> EngineState:
+        if enabled:
+            await self._ensure_connection()
+            await self.trade_executor.set_enabled(self.broker.connected)
+        else:
+            await self.trade_executor.set_enabled(False)
+        await self._broadcast()
+        return self.state()
 
     async def _run(self) -> None:
         while not self._stop.is_set():
@@ -447,10 +469,15 @@ class MarketEngine:
         return preferred
 
     def _load_signal_history(self) -> List[Signal]:
-        if not self._signals_path.exists():
+        if self.storage is not None:
+            payload = self.storage.load_json(self._signals_path.name, self._signals_path)
+            if payload is None:
+                return []
+        elif not self._signals_path.exists():
             return []
+        else:
+            payload = StateStorage._load_local(self._signals_path) or {}
         try:
-            payload = json.loads(self._signals_path.read_text(encoding="utf-8"))
             signals = [
                 Signal.model_validate(item)
                 for item in payload.get("signals", [])
@@ -459,20 +486,7 @@ class MarketEngine:
             signals.sort(key=lambda signal: signal.created_at)
             return self._trim_signal_history(signals)
         except Exception:
-            backup = self._signals_path.with_suffix(f"{self._signals_path.suffix}.bak")
-            if not backup.exists():
-                return []
-            try:
-                payload = json.loads(backup.read_text(encoding="utf-8"))
-                signals = [
-                    Signal.model_validate(item)
-                    for item in payload.get("signals", [])
-                    if isinstance(item, dict) and item.get("id")
-                ]
-                signals.sort(key=lambda signal: signal.created_at)
-                return self._trim_signal_history(signals)
-            except Exception:
-                return []
+            return []
 
     def _signals_from_performance(self) -> List[Signal]:
         signals: List[Signal] = []
@@ -525,7 +539,6 @@ class MarketEngine:
         )
 
     def _save_signal_history(self, signals: Optional[List[Signal]] = None) -> None:
-        self._signals_path.parent.mkdir(parents=True, exist_ok=True)
         source = signals if signals is not None else self.signals
         payload = {
             "signals": [
@@ -533,13 +546,7 @@ class MarketEngine:
                 for signal in self._trim_signal_history(source)
             ]
         }
-        encoded = json.dumps(payload, ensure_ascii=False, indent=2)
-        temp_path = self._signals_path.with_suffix(f"{self._signals_path.suffix}.tmp")
-        backup_path = self._signals_path.with_suffix(f"{self._signals_path.suffix}.bak")
-        temp_path.write_text(encoded, encoding="utf-8")
-        if self._signals_path.exists():
-            backup_path.write_text(self._signals_path.read_text(encoding="utf-8"), encoding="utf-8")
-        temp_path.replace(self._signals_path)
+        self.storage.save_json(self._signals_path.name, self._signals_path, payload)
 
     def _restore_signal_cooldowns(self) -> None:
         for signal in self.signals[-80:]:
