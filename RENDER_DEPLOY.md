@@ -55,7 +55,7 @@ DEFAULT_TIMEFRAME -> 30, 45, 60, 120, 180 o 300. Por defecto: 60.
 POLL_INTERVAL_SECONDS -> Frecuencia de consulta al broker. Por defecto: 2.0.
 CANDLE_COUNT -> Cantidad de velas analizadas por activo. Por defecto: 80.
 SIGNAL_COOLDOWN_SECONDS -> Enfriamiento por activo/direccion. Por defecto: 45.
-SIGNAL_HISTORY_LIMIT -> Senales conservadas en signals.json. Por defecto: 1000.
+SIGNAL_HISTORY_LIMIT -> Senales conservadas en signals.json. Por defecto: 500; el codigo lo limita a 500 aunque Render tenga un valor mayor.
 API_SIGNAL_LIMIT -> Senales recientes enviadas al dashboard. Por defecto: 500.
 IQ_OPTION_BALANCE_MODE -> PRACTICE o REAL. Por defecto: PRACTICE.
 IQ_OPTION_2FA_CODE -> Codigo temporal si IQ Option solicita 2FA/SMS.

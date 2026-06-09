@@ -71,7 +71,7 @@ async def health() -> dict:
         "telegram_configured": bool(settings.telegram_bot_token and settings.telegram_chat_id),
         "telegram_last_error": engine.notifier.last_error,
         "data_dir": str(engine._data_dir),
-        "signal_history_limit": settings.signal_history_limit,
+        "signal_history_limit": engine._signal_history_limit,
         "api_signal_limit": settings.api_signal_limit,
         "version": "iq-option-real-trading-2026-06-08",
     }

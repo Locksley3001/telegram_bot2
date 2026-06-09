@@ -44,7 +44,7 @@ class MarketEngine:
             versions_table=settings.supabase_versions_table,
             bootstrap_local=settings.supabase_bootstrap_local,
         )
-        self._signal_history_limit = max(1, settings.signal_history_limit)
+        self._signal_history_limit = max(1, min(500, settings.signal_history_limit))
         self._api_signal_limit = max(1, settings.api_signal_limit)
         self.notifier = TelegramNotifier(
             settings.telegram_bot_token,
@@ -288,8 +288,8 @@ class MarketEngine:
                     self._emitted_signal_ids.add(signal.id)
                     self.signals = self._trim_signal_history(self.signals)
                     self._save_signal_history()
-                    if len(self._emitted_signal_ids) > 1000:
-                        self._emitted_signal_ids = {item.id for item in self.signals[-500:]}
+                    if len(self._emitted_signal_ids) > self._signal_history_limit:
+                        self._emitted_signal_ids = {item.id for item in self.signals[-self._signal_history_limit :]}
                     emit_signal = signal
             if emit_signal is not None:
                 await self.notifier.send_signal(emit_signal)
@@ -484,7 +484,10 @@ class MarketEngine:
                 if isinstance(item, dict) and item.get("id")
             ]
             signals.sort(key=lambda signal: signal.created_at)
-            return self._trim_signal_history(signals)
+            trimmed = self._trim_signal_history(signals)
+            if len(trimmed) < len(signals):
+                self._save_signal_history(trimmed)
+            return trimmed
         except Exception:
             return []
 
@@ -500,16 +503,10 @@ class MarketEngine:
         return signals
 
     def _combined_signal_history(self, limit: int = 200) -> List[Signal]:
-        by_id: Dict[str, Signal] = {signal.id: signal for signal in self.signals}
-        for record in self.performance.records.values():
-            if record.is_shadow:
-                continue
-            by_id.setdefault(record.id, self._signal_from_record(record))
-        return sorted(by_id.values(), key=lambda signal: signal.created_at)[-limit:]
+        return sorted(self.signals, key=lambda signal: signal.created_at)[-limit:]
 
     def _signal_history_total(self) -> int:
-        real_record_ids = {record.id for record in self.performance.records.values() if not record.is_shadow}
-        return len({signal.id for signal in self.signals} | real_record_ids)
+        return len(self.signals)
 
     def _trim_signal_history(self, signals: List[Signal]) -> List[Signal]:
         by_id: Dict[str, Signal] = {}

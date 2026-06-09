@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
     signal_cooldown_seconds: int = Field(default=45, alias="SIGNAL_COOLDOWN_SECONDS")
     data_dir: str = Field(default="data", alias="DATA_DIR")
-    signal_history_limit: int = Field(default=1000, alias="SIGNAL_HISTORY_LIMIT")
+    signal_history_limit: int = Field(default=500, alias="SIGNAL_HISTORY_LIMIT")
     api_signal_limit: int = Field(default=500, alias="API_SIGNAL_LIMIT")
     learning_enabled: bool = Field(default=True, alias="LEARNING_ENABLED")
     learning_min_history: int = Field(default=30, alias="LEARNING_MIN_HISTORY")

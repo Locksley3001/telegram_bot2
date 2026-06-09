@@ -52,7 +52,7 @@ POLL_INTERVAL_SECONDS=0.75
 CANDLE_COUNT=80
 SIGNAL_COOLDOWN_SECONDS=45
 DATA_DIR=data
-SIGNAL_HISTORY_LIMIT=1000
+SIGNAL_HISTORY_LIMIT=500
 API_SIGNAL_LIMIT=500
 LEARNING_ENABLED=true
 LEARNING_MIN_HISTORY=30
@@ -76,9 +76,11 @@ Telegram solo envia senales con puntuacion `>= 7`.
 
 El monitor usa stream de velas en tiempo real cuando IQ Option lo permite, y la logica CCI puede alertar sobre la vela en formacion cuando ya hay rechazo/cansancio suficiente.
 
-El historial de alertas se guarda en `DATA_DIR/signals.json`. Por defecto `DATA_DIR=data`.
-`SIGNAL_HISTORY_LIMIT` controla cuantas senales se conservan en ese archivo y `API_SIGNAL_LIMIT`
-cuantas se mandan al dashboard en cada actualizacion.
+El historial visual de alertas se guarda en `DATA_DIR/signals.json`. Por defecto `DATA_DIR=data`.
+`SIGNAL_HISTORY_LIMIT` controla cuantas senales se conservan en ese archivo y queda limitado a 500
+para evitar que el panel se llene; `API_SIGNAL_LIMIT` controla cuantas se mandan al dashboard en cada
+actualizacion. Este historial no es la memoria principal de aprendizaje: el aprendizaje se reconstruye
+desde `performance.json`.
 
 El dashboard de rendimiento guarda las senales emitidas en `DATA_DIR/performance.json` y las evalua
 despues de la expiracion sugerida para medir ganadas, perdidas, empates, pendientes y acierto por mercado.
