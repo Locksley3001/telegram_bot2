@@ -13,6 +13,10 @@ MIN_FORMING_PROGRESS = 0.28
 
 
 class PriceActionAnalyzer:
+    def __init__(self, *, cautious_stake: int = 10000, safe_stake: int = 20000) -> None:
+        self.cautious_stake = max(1, int(cautious_stake))
+        self.safe_stake = max(self.cautious_stake, int(safe_stake))
+
     def analyze(self, asset: str, timeframe: int, candles: List[Candle]) -> Tuple[List[Zone], Optional[Signal], dict]:
         usable = [candle for candle in candles if candle.high >= candle.low and candle.open > 0]
         zones = self.detect_zones(usable)
@@ -426,12 +430,12 @@ class PriceActionAnalyzer:
             decision = f"SENAL DESCARTADA - {'; '.join(blockers)}"
         elif factor_score >= 4:
             confidence = "high"
-            stake_amount = 20000
-            decision = f"OPERACION {direction} - $20.000 - al abrir siguiente vela ({setup_label})"
+            stake_amount = self.safe_stake
+            decision = f"OPERACION {direction} - {self._format_money(stake_amount)} - al abrir siguiente vela ({setup_label})"
         elif factor_score >= 2:
             confidence = "low"
-            stake_amount = 10000
-            decision = f"OPERACION {direction} - $10.000 - al abrir siguiente vela ({setup_label})"
+            stake_amount = self.cautious_stake
+            decision = f"OPERACION {direction} - {self._format_money(stake_amount)} - al abrir siguiente vela ({setup_label})"
 
         if tired_enough:
             exhaustion_detail = ", ".join(exhaustion_signals) if exhaustion_signals else "sin senales especificas"
@@ -636,6 +640,10 @@ class PriceActionAnalyzer:
                 "- Jamas opero cuando: saldo insuficiente, confluencia invalida o vela actual contradice el setup.",
             ]
         )
+
+    @staticmethod
+    def _format_money(value: int) -> str:
+        return f"${int(value):,}".replace(",", ".")
 
     @staticmethod
     def _cci_series(candles: List[Candle], period: int) -> List[float]:

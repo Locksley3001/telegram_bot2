@@ -64,6 +64,11 @@ ADVANTAGE_FILTER_ENABLED=true
 ADVANTAGE_FILTER_MIN_WIN_RATE=60
 ADVANTAGE_FILTER_MIN_SAMPLES=30
 ADVANTAGE_FILTER_MIN_FACTOR_SCORE=4
+VIRTUAL_INITIAL_BALANCE=50000
+VIRTUAL_TARGET_BALANCE=500000
+VIRTUAL_CAUTIOUS_STAKE=10000
+VIRTUAL_SAFE_STAKE=20000
+VIRTUAL_PAYOUT_RATE=0.85
 BROKER_TRADING_ENABLED=false
 BROKER_TRADE_ENTRY_WINDOW_SECONDS=3
 SUPABASE_URL=https://kwbqjullmtrankjpmwfs.supabase.co
@@ -101,6 +106,11 @@ El filtro de ventaja no cambia como aprende el sistema ni la tecnica de entrada:
 que el aprendizaje ya permitio y que ademas superan `ADVANTAGE_FILTER_MIN_WIN_RATE`, tienen al menos
 `ADVANTAGE_FILTER_MIN_SAMPLES` muestras parecidas y alcanzan `ADVANTAGE_FILTER_MIN_FACTOR_SCORE`.
 Para volver al comportamiento mas libre, usa `ADVANTAGE_FILTER_ENABLED=false`.
+
+El saldo virtual y los montos de operacion se controlan con `VIRTUAL_INITIAL_BALANCE`,
+`VIRTUAL_TARGET_BALANCE`, `VIRTUAL_CAUTIOUS_STAKE`, `VIRTUAL_SAFE_STAKE` y `VIRTUAL_PAYOUT_RATE`.
+`VIRTUAL_CAUTIOUS_STAKE` tambien actua como apuesta minima y umbral de quiebra: si el saldo queda
+por debajo de ese valor, se reinicia al saldo inicial. `VIRTUAL_SAFE_STAKE` es la apuesta alta.
 
 ## Trading automatico en IQ Option
 

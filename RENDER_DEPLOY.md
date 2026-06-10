@@ -67,6 +67,11 @@ ADVANTAGE_FILTER_ENABLED -> Exige ventaja historica extra antes de operar. Por d
 ADVANTAGE_FILTER_MIN_WIN_RATE -> Acierto historico minimo del patron permitido por aprendizaje. Por defecto: 60.
 ADVANTAGE_FILTER_MIN_SAMPLES -> Muestras similares minimas para confiar en el patron. Por defecto: 30.
 ADVANTAGE_FILTER_MIN_FACTOR_SCORE -> Puntuacion tecnica minima 0-6 antes de operar. Por defecto: 4.
+VIRTUAL_INITIAL_BALANCE -> Saldo virtual inicial y saldo al reiniciar por quiebra/meta. Por defecto: 50000.
+VIRTUAL_TARGET_BALANCE -> Meta del saldo virtual. Por defecto: 500000.
+VIRTUAL_CAUTIOUS_STAKE -> Apuesta baja, apuesta minima y umbral de quiebra. Por defecto: 10000.
+VIRTUAL_SAFE_STAKE -> Apuesta alta. Por defecto: 20000.
+VIRTUAL_PAYOUT_RATE -> Payout simulado para saldo virtual. Por defecto: 0.85.
 BROKER_TRADING_ENABLED -> Envia operaciones al broker cuando una senal pasa a pending. Por defecto: false.
 BROKER_TRADE_ENTRY_WINDOW_SECONDS -> Ventana maxima para entrar despues de abrir la vela. Por defecto: 3.
 SUPABASE_URL -> URL del proyecto Supabase. Ejemplo: https://kwbqjullmtrankjpmwfs.supabase.co

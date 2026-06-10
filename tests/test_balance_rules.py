@@ -26,6 +26,7 @@ def make_engine(wallet: VirtualBalanceSummary) -> MarketEngine:
         advantage_filter_min_win_rate=60.0,
         advantage_filter_min_samples=30,
         advantage_filter_min_factor_score=4,
+        virtual_cautious_stake=10000,
     )
     return engine
 
@@ -156,6 +157,34 @@ class BalanceRulesTests(unittest.TestCase):
         reason = engine._advantage_filter_block_reason(signal, decision)
 
         self.assertEqual(reason, "")
+
+    def test_balance_rules_use_configured_stakes_from_wallet(self) -> None:
+        wallet = VirtualBalanceSummary(
+            balance=75000,
+            cautious_stake=15000,
+            safe_stake=30000,
+            high_confidence_threshold=4,
+        )
+        engine = make_engine(wallet)
+        signal = make_signal(4)
+        context = {"factor_score": 4}
+
+        approved, updated = engine._apply_balance_rules(signal, context)
+
+        self.assertIs(approved, signal)
+        self.assertEqual(signal.stake_amount, 30000)
+        self.assertEqual(updated["stake_amount"], 30000)
+
+    def test_balance_rules_block_below_configured_minimum(self) -> None:
+        wallet = VirtualBalanceSummary(balance=14999, cautious_stake=15000, safe_stake=30000)
+        engine = make_engine(wallet)
+        signal = make_signal(4)
+        context = {"factor_score": 4}
+
+        approved, updated = engine._apply_balance_rules(signal, context)
+
+        self.assertIsNone(approved)
+        self.assertIn("$15.000", updated["reason"])
 
 
 if __name__ == "__main__":

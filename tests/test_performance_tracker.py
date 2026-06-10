@@ -117,6 +117,49 @@ class PerformanceTrackerTests(unittest.TestCase):
         self.assertEqual(wallet.last_reset_reason, "bankruptcy")
         self.assertFalse(wallet.post_target_consolidation)
 
+    def test_virtual_balance_uses_configured_amounts(self) -> None:
+        tracker = PerformanceTracker(
+            self.path,
+            initial_balance=60000,
+            target_balance=120000,
+            cautious_stake=15000,
+            safe_stake=30000,
+            payout_rate=0.80,
+        )
+        tracker.records = {
+            "loss-1": make_outcome(1, stake_amount=30000),
+            "loss-2": make_outcome(2, stake_amount=30000),
+        }
+
+        wallet = tracker.virtual_balance()
+
+        self.assertEqual(wallet.initial_balance, 60000)
+        self.assertEqual(wallet.target_balance, 120000)
+        self.assertEqual(wallet.cautious_stake, 15000)
+        self.assertEqual(wallet.safe_stake, 30000)
+        self.assertEqual(wallet.balance, 60000)
+        self.assertEqual(wallet.bankruptcies, 1)
+        self.assertIn("$15.000", wallet.history[-1].note)
+
+    def test_custom_target_resets_to_custom_initial_balance(self) -> None:
+        tracker = PerformanceTracker(
+            self.path,
+            initial_balance=60000,
+            target_balance=90000,
+            cautious_stake=15000,
+            safe_stake=30000,
+            payout_rate=0.80,
+        )
+        tracker.records = {
+            "win-1": make_outcome(1, status="win", stake_amount=40000),
+        }
+
+        wallet = tracker.virtual_balance()
+
+        self.assertEqual(wallet.balance, 60000)
+        self.assertEqual(wallet.targets_hit, 1)
+        self.assertEqual(wallet.last_reset_reason, "target")
+
 
 if __name__ == "__main__":
     unittest.main()

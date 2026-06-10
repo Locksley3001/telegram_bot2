@@ -9,17 +9,32 @@ from app.models import BalanceEvent, Candle, PerformanceBucket, PerformanceSumma
 from app.state_storage import StateStorage
 
 
-INITIAL_BALANCE = 50000
-TARGET_BALANCE = 500000
-SAFE_STAKE = 20000
-CAUTIOUS_STAKE = 10000
-PAYOUT_RATE = 0.85
+DEFAULT_INITIAL_BALANCE = 50000
+DEFAULT_TARGET_BALANCE = 500000
+DEFAULT_SAFE_STAKE = 20000
+DEFAULT_CAUTIOUS_STAKE = 10000
+DEFAULT_PAYOUT_RATE = 0.85
 
 
 class PerformanceTracker:
-    def __init__(self, path: Path, storage: Optional[StateStorage] = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        storage: Optional[StateStorage] = None,
+        *,
+        initial_balance: int = DEFAULT_INITIAL_BALANCE,
+        target_balance: int = DEFAULT_TARGET_BALANCE,
+        safe_stake: int = DEFAULT_SAFE_STAKE,
+        cautious_stake: int = DEFAULT_CAUTIOUS_STAKE,
+        payout_rate: float = DEFAULT_PAYOUT_RATE,
+    ) -> None:
         self.path = path
         self.storage = storage
+        self.initial_balance = max(1, int(initial_balance))
+        self.cautious_stake = max(1, int(cautious_stake))
+        self.safe_stake = max(self.cautious_stake, int(safe_stake))
+        self.target_balance = max(self.initial_balance + self.cautious_stake, int(target_balance))
+        self.payout_rate = max(0.01, float(payout_rate))
         self.records: Dict[str, SignalOutcome] = {}
         self._loaded_ok = True
         self._load()
@@ -41,7 +56,7 @@ class PerformanceTracker:
             entry_price=0.0,
             entry_at=entry_at,
             stake_amount=signal.stake_amount,
-            payout_rate=PAYOUT_RATE,
+            payout_rate=self.payout_rate,
             status="waiting_entry",
             timeframe=signal.timeframe,
             suggested_expiration=signal.suggested_expiration,
@@ -169,7 +184,7 @@ class PerformanceTracker:
         )
 
     def virtual_balance(self, *, timeframe: int = 60) -> VirtualBalanceSummary:
-        balance = INITIAL_BALANCE
+        balance = self.initial_balance
         bankruptcies = 0
         targets_hit = 0
         consecutive_losses = 0
@@ -193,7 +208,7 @@ class PerformanceTracker:
             stake = int(record.stake_amount or 0)
             profit = 0
             if record.status == "win":
-                profit = int(round(stake * float(record.payout_rate or PAYOUT_RATE)))
+                profit = int(round(stake * float(record.payout_rate or self.payout_rate)))
                 balance += profit
                 consecutive_wins += 1
                 consecutive_losses = 0
@@ -227,9 +242,9 @@ class PerformanceTracker:
                 )
             )
 
-            if balance < CAUTIOUS_STAKE:
+            if balance < self.cautious_stake:
                 bankruptcies += 1
-                balance = INITIAL_BALANCE
+                balance = self.initial_balance
                 consecutive_wins = 0
                 consecutive_losses = 0
                 operations_since_reset = 0
@@ -240,14 +255,17 @@ class PerformanceTracker:
                         mark=f"[QUIEBRA #{bankruptcies}]",
                         stake_amount=0,
                         result="reinicio",
-                        profit=INITIAL_BALANCE,
+                        profit=self.initial_balance,
                         balance=balance,
-                        note="Saldo quedo por debajo de $10.000; reinicio y proteccion reforzada.",
+                        note=(
+                            f"Saldo quedo por debajo de {self._format_money(self.cautious_stake)}; "
+                            "reinicio y proteccion reforzada."
+                        ),
                     )
                 )
-            elif balance >= TARGET_BALANCE:
+            elif balance >= self.target_balance:
                 targets_hit += 1
-                balance = INITIAL_BALANCE
+                balance = self.initial_balance
                 consecutive_wins = 0
                 consecutive_losses = 0
                 operations_since_reset = 0
@@ -288,13 +306,18 @@ class PerformanceTracker:
             mode = f"Consolidacion post-meta - {remaining} operacion(es) de proteccion"
         if pause_remaining:
             mode = f"{mode}; pausa {pause_remaining} vela(s)"
-        elif balance < CAUTIOUS_STAKE:
+        elif balance < self.cautious_stake:
             mode = "Modo proteccion - saldo insuficiente"
-        elif balance < SAFE_STAKE:
-            mode = "Modo proteccion - apuesta maxima 10000"
+        elif balance < self.safe_stake:
+            mode = f"Modo proteccion - apuesta maxima {self._format_money(self.cautious_stake)}"
 
         return VirtualBalanceSummary(
+            initial_balance=self.initial_balance,
+            target_balance=self.target_balance,
             balance=balance,
+            safe_stake=self.safe_stake,
+            cautious_stake=self.cautious_stake,
+            payout_rate=self.payout_rate,
             bankruptcies=bankruptcies,
             targets_hit=targets_hit,
             consecutive_losses=consecutive_losses,
@@ -400,6 +423,10 @@ class PerformanceTracker:
     def _win_rate(wins: int, losses: int) -> float:
         total = wins + losses
         return round((wins / total) * 100.0, 1) if total else 0.0
+
+    @staticmethod
+    def _format_money(value: int) -> str:
+        return f"${int(value):,}".replace(",", ".")
 
     @classmethod
     def _normalize_record(cls, record: SignalOutcome) -> SignalOutcome:

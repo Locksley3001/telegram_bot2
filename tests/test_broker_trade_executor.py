@@ -104,6 +104,16 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trades, [])
         self.assertEqual(broker.calls, [])
 
+    async def test_respects_configured_min_stake(self) -> None:
+        broker = FakeBroker()
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", min_stake=15000)
+        record = make_record(stake_amount=10000)
+
+        trades = await executor.execute_due("EURUSD-OTC", [record], broker)
+
+        self.assertEqual(trades, [])
+        self.assertEqual(broker.calls, [])
+
     async def test_disconnected_broker_does_not_mark_record_failed(self) -> None:
         broker = FakeBroker()
         broker.connected = False

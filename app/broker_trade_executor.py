@@ -20,6 +20,7 @@ class BrokerTradeExecutor:
         enabled: bool,
         balance_mode: str,
         entry_window_seconds: float = 3.0,
+        min_stake: int = 10000,
         storage: Optional[StateStorage] = None,
     ) -> None:
         self.path = path
@@ -27,6 +28,7 @@ class BrokerTradeExecutor:
         self.enabled = enabled
         self.balance_mode = balance_mode.strip().upper() or "PRACTICE"
         self.entry_window_seconds = max(0.5, entry_window_seconds)
+        self.min_stake = max(1, int(min_stake))
         self.trades: Dict[str, BrokerTrade] = {}
         self.last_error = ""
         self._lock = asyncio.Lock()
@@ -84,7 +86,7 @@ class BrokerTradeExecutor:
             return False
         if record.status != "pending":
             return False
-        if record.direction not in {"CALL", "PUT"} or record.stake_amount < 10000:
+        if record.direction not in {"CALL", "PUT"} or record.stake_amount < self.min_stake:
             return False
         if record.entry_at is None:
             return False
@@ -195,6 +197,7 @@ class BrokerTradeExecutor:
             "enabled": self.enabled,
             "balance_mode": self.balance_mode,
             "entry_window_seconds": self.entry_window_seconds,
+            "min_stake": self.min_stake,
             "trades": [
                 trade.model_dump(mode="json")
                 for trade in sorted(self.trades.values(), key=lambda item: item.requested_at)

@@ -55,13 +55,25 @@ class MarketEngine:
             self._data_dir / "telegram_notifications.json",
             storage=self.storage,
         )
-        self.analyzer = PriceActionAnalyzer()
-        self.performance = PerformanceTracker(self._data_dir / "performance.json", storage=self.storage)
+        self.analyzer = PriceActionAnalyzer(
+            cautious_stake=settings.virtual_cautious_stake,
+            safe_stake=settings.virtual_safe_stake,
+        )
+        self.performance = PerformanceTracker(
+            self._data_dir / "performance.json",
+            storage=self.storage,
+            initial_balance=settings.virtual_initial_balance,
+            target_balance=settings.virtual_target_balance,
+            safe_stake=settings.virtual_safe_stake,
+            cautious_stake=settings.virtual_cautious_stake,
+            payout_rate=settings.virtual_payout_rate,
+        )
         self.trade_executor = BrokerTradeExecutor(
             self._data_dir / "broker_trades.json",
             enabled=settings.broker_trading_enabled,
             balance_mode=settings.iq_option_balance_mode,
             entry_window_seconds=settings.broker_trade_entry_window_seconds,
+            min_stake=settings.virtual_cautious_stake,
             storage=self.storage,
         )
         self.learning = SignalLearningSystem(
@@ -381,7 +393,7 @@ class MarketEngine:
         self._register_shadow_signal(signal, str(context.get("shadow_reason") or context.get("learning_event") or "senal bloqueada"))
 
     def _can_emit(self, signal: Signal) -> bool:
-        if signal.stake_amount < 10000:
+        if signal.stake_amount < max(1, int(self.settings.virtual_cautious_stake)):
             return False
         if signal.id in self._emitted_signal_ids:
             return False
@@ -394,12 +406,14 @@ class MarketEngine:
     def _apply_balance_rules(self, signal: Signal, context: dict) -> tuple[Optional[Signal], dict]:
         wallet = self.performance.virtual_balance(timeframe=self.timeframe)
         reason_suffixes: List[str] = []
+        cautious_stake = int(wallet.cautious_stake)
+        safe_stake = int(wallet.safe_stake)
 
-        if wallet.balance < 10000:
+        if wallet.balance < cautious_stake:
             context["shadow_signal"] = signal
             return self._block_signal(
                 context,
-                "SENAL DESCARTADA - saldo inferior a $10.000; modo proteccion activo",
+                f"SENAL DESCARTADA - saldo inferior a {self._format_money(cautious_stake)}; modo proteccion activo",
             )
         if wallet.pause_candles_remaining > 0:
             context["shadow_signal"] = signal
@@ -443,38 +457,41 @@ class MarketEngine:
             )
 
         if factor_score >= wallet.high_confidence_threshold:
-            stake = 20000
+            stake = safe_stake
             confidence = "high"
         elif factor_score >= 2:
-            stake = 10000
+            stake = cautious_stake
             confidence = "low"
         else:
             context["shadow_signal"] = signal
             return self._block_signal(context, "SENAL DESCARTADA - puntuacion insuficiente")
 
-        if wallet.balance < 20000 and stake > 10000:
-            stake = 10000
+        if wallet.balance < safe_stake and stake > cautious_stake:
+            stake = cautious_stake
             confidence = "low"
-            reason_suffixes.append("saldo bajo: apuesta limitada a $10.000")
-        if loss_streak_caution and stake > 10000:
-            stake = 10000
+            reason_suffixes.append(f"saldo bajo: apuesta limitada a {self._format_money(cautious_stake)}")
+        if loss_streak_caution and stake > cautious_stake:
+            stake = cautious_stake
             confidence = "low"
-            reason_suffixes.append("racha de perdidas: recuperacion con $10.000")
-        if wallet.post_target_consolidation and stake > 10000:
-            stake = 10000
+            reason_suffixes.append(f"racha de perdidas: recuperacion con {self._format_money(cautious_stake)}")
+        if wallet.post_target_consolidation and stake > cautious_stake:
+            stake = cautious_stake
             confidence = "low"
-            reason_suffixes.append("consolidacion post-meta: maximo $10.000")
-        if wallet.bankruptcies >= 4 and wallet.operations_since_reset < 10 and stake > 10000:
-            stake = 10000
+            reason_suffixes.append(f"consolidacion post-meta: maximo {self._format_money(cautious_stake)}")
+        if wallet.bankruptcies >= 4 and wallet.operations_since_reset < 10 and stake > cautious_stake:
+            stake = cautious_stake
             confidence = "low"
-            reason_suffixes.append("Quiebra #4+: maximo $10.000 en las primeras 10 operaciones")
+            reason_suffixes.append(f"Quiebra #4+: maximo {self._format_money(cautious_stake)} en las primeras 10 operaciones")
         if stake > wallet.balance:
-            stake = 10000 if wallet.balance >= 10000 else 0
+            stake = cautious_stake if wallet.balance >= cautious_stake else 0
             confidence = "low"
             reason_suffixes.append("saldo disponible limita la apuesta")
-        if stake < 10000:
+        if stake < cautious_stake:
             context["shadow_signal"] = signal
-            return self._block_signal(context, "SENAL DESCARTADA - saldo insuficiente para $10.000")
+            return self._block_signal(
+                context,
+                f"SENAL DESCARTADA - saldo insuficiente para {self._format_money(cautious_stake)}",
+            )
 
         signal.stake_amount = stake
         signal.confidence = confidence
@@ -501,6 +518,10 @@ class MarketEngine:
         if analysis_text:
             context["analysis_text"] = f"{analysis_text}\n-> {reason}"
         return None, context
+
+    @staticmethod
+    def _format_money(value: int) -> str:
+        return f"${int(value):,}".replace(",", ".")
 
     @staticmethod
     def _cooldown_key(signal: Signal) -> str:
