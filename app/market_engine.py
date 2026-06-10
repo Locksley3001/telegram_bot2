@@ -251,7 +251,14 @@ class MarketEngine:
             if signal is not None:
                 decision = self.learning.decide(signal)
                 if decision.allowed:
-                    signal = self.learning.annotate_signal(signal, decision)
+                    block_reason = self._advantage_filter_block_reason(signal, decision)
+                    if block_reason:
+                        self._register_shadow_signal(signal, block_reason)
+                        context["market_message"] = block_reason
+                        context["reason"] = block_reason
+                        signal = None
+                    else:
+                        signal = self.learning.annotate_signal(signal, decision)
                 else:
                     self._register_shadow_signal(signal, decision.reason)
                     context["market_message"] = decision.reason
@@ -311,6 +318,32 @@ class MarketEngine:
             return
         self._last_learning_event[asset] = key
         self.learning.remember_technical_block(f"{asset}: {event}")
+
+    def _advantage_filter_block_reason(self, signal: Signal, decision) -> str:
+        if not self.settings.advantage_filter_enabled:
+            return ""
+
+        min_rate = max(1.0, min(95.0, float(self.settings.advantage_filter_min_win_rate))) / 100.0
+        min_samples = max(1, int(self.settings.advantage_filter_min_samples))
+        min_factor_score = max(0, min(6, int(self.settings.advantage_filter_min_factor_score)))
+        factor_score = int(getattr(signal, "factor_score", 0) or 0)
+
+        if factor_score < min_factor_score:
+            return (
+                "FILTRO VENTAJA - bloqueada: "
+                f"puntuacion {factor_score}/6; minimo {min_factor_score}/6."
+            )
+        if decision.evidence_samples < min_samples:
+            return (
+                "FILTRO VENTAJA - bloqueada: "
+                f"{decision.evidence_samples} muestras similares; minimo {min_samples}."
+            )
+        if decision.estimated_win_rate < min_rate:
+            return (
+                "FILTRO VENTAJA - bloqueada: "
+                f"historico {decision.estimated_win_rate * 100:.1f}%; minimo {min_rate * 100:.1f}%."
+            )
+        return ""
 
     def _register_shadow_signal(self, signal: Signal, reason: str) -> None:
         shadow_id = f"shadow:{signal.id}"

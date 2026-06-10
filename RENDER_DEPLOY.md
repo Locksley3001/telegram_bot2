@@ -63,6 +63,10 @@ LEARNING_ENABLED -> Activa o pausa el filtro de aprendizaje. Por defecto: true.
 LEARNING_MIN_HISTORY -> Casos resueltos antes de bloquear por aprendizaje. Por defecto: 30.
 LEARNING_MIN_WIN_RATE -> Porcentaje minimo esperado para permitir una senal. Por defecto: 58.
 LEARNING_EXPLORATION_INTERVAL -> Permite una senal fuerte cada N bloqueos para seguir aprendiendo. Por defecto: 20. Usa 0 para desactivarlo.
+ADVANTAGE_FILTER_ENABLED -> Exige ventaja historica extra antes de operar. Por defecto: true.
+ADVANTAGE_FILTER_MIN_WIN_RATE -> Acierto historico minimo del patron permitido por aprendizaje. Por defecto: 60.
+ADVANTAGE_FILTER_MIN_SAMPLES -> Muestras similares minimas para confiar en el patron. Por defecto: 30.
+ADVANTAGE_FILTER_MIN_FACTOR_SCORE -> Puntuacion tecnica minima 0-6 antes de operar. Por defecto: 4.
 BROKER_TRADING_ENABLED -> Envia operaciones al broker cuando una senal pasa a pending. Por defecto: false.
 BROKER_TRADE_ENTRY_WINDOW_SECONDS -> Ventana maxima para entrar despues de abrir la vela. Por defecto: 3.
 SUPABASE_URL -> URL del proyecto Supabase. Ejemplo: https://kwbqjullmtrankjpmwfs.supabase.co

@@ -60,6 +60,10 @@ LEARNING_MIN_WIN_RATE=58
 LEARNING_MIN_RULE_SAMPLES=5
 LEARNING_MIN_SIMILARITY_SAMPLES=4
 LEARNING_EXPLORATION_INTERVAL=20
+ADVANTAGE_FILTER_ENABLED=true
+ADVANTAGE_FILTER_MIN_WIN_RATE=60
+ADVANTAGE_FILTER_MIN_SAMPLES=30
+ADVANTAGE_FILTER_MIN_FACTOR_SCORE=4
 BROKER_TRADING_ENABLED=false
 BROKER_TRADE_ENTRY_WINDOW_SECONDS=3
 SUPABASE_URL=https://kwbqjullmtrankjpmwfs.supabase.co
@@ -92,6 +96,11 @@ El filtro de aprendizaje usa todo `DATA_DIR/performance.json`, guarda su memoria
 y bloquea senales cuando casos historicos parecidos no superan el acierto minimo configurado. Para evitar
 que el aprendizaje se quede sin muestras nuevas, `LEARNING_EXPLORATION_INTERVAL` permite una senal fuerte
 de exploracion cada N bloqueos; usa `0` para desactivarlo.
+
+El filtro de ventaja no cambia como aprende el sistema ni la tecnica de entrada: solo deja operar senales
+que el aprendizaje ya permitio y que ademas superan `ADVANTAGE_FILTER_MIN_WIN_RATE`, tienen al menos
+`ADVANTAGE_FILTER_MIN_SAMPLES` muestras parecidas y alcanzan `ADVANTAGE_FILTER_MIN_FACTOR_SCORE`.
+Para volver al comportamiento mas libre, usa `ADVANTAGE_FILTER_ENABLED=false`.
 
 ## Trading automatico en IQ Option
 

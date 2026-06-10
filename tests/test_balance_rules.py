@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import unittest
 from datetime import timedelta
+from types import SimpleNamespace
 
+from app.learning import LearningDecision
 from app.market_engine import MarketEngine
 from app.models import Signal, VirtualBalanceSummary, utc_now
 
@@ -19,6 +21,12 @@ def make_engine(wallet: VirtualBalanceSummary) -> MarketEngine:
     engine = MarketEngine.__new__(MarketEngine)
     engine.performance = FakePerformance(wallet)
     engine.timeframe = 60
+    engine.settings = SimpleNamespace(
+        advantage_filter_enabled=True,
+        advantage_filter_min_win_rate=60.0,
+        advantage_filter_min_samples=30,
+        advantage_filter_min_factor_score=4,
+    )
     return engine
 
 
@@ -111,6 +119,43 @@ class BalanceRulesTests(unittest.TestCase):
         self.assertEqual(signal.stake_amount, 10000)
         self.assertEqual(updated["stake_amount"], 10000)
         self.assertIn("consolidacion post-meta", updated["market_message"])
+
+    def test_advantage_filter_blocks_when_not_enough_samples(self) -> None:
+        engine = make_engine(VirtualBalanceSummary())
+        signal = make_signal(4)
+        decision = LearningDecision(True, 0.70, 12, "test")
+
+        reason = engine._advantage_filter_block_reason(signal, decision)
+
+        self.assertIn("12 muestras similares", reason)
+
+    def test_advantage_filter_blocks_when_estimate_is_below_target(self) -> None:
+        engine = make_engine(VirtualBalanceSummary())
+        signal = make_signal(4)
+        decision = LearningDecision(True, 0.58, 50, "test")
+
+        reason = engine._advantage_filter_block_reason(signal, decision)
+
+        self.assertIn("historico 58.0%", reason)
+
+    def test_advantage_filter_allows_when_edge_is_strong_enough(self) -> None:
+        engine = make_engine(VirtualBalanceSummary())
+        signal = make_signal(4)
+        decision = LearningDecision(True, 0.61, 50, "test")
+
+        reason = engine._advantage_filter_block_reason(signal, decision)
+
+        self.assertEqual(reason, "")
+
+    def test_advantage_filter_can_be_disabled(self) -> None:
+        engine = make_engine(VirtualBalanceSummary())
+        engine.settings.advantage_filter_enabled = False
+        signal = make_signal(1)
+        decision = LearningDecision(True, 0.30, 1, "test")
+
+        reason = engine._advantage_filter_block_reason(signal, decision)
+
+        self.assertEqual(reason, "")
 
 
 if __name__ == "__main__":
