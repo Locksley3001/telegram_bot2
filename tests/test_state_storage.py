@@ -35,6 +35,21 @@ class RecordingStorage(StateStorage):
         return None
 
 
+class FailingSaveStorage(RecordingStorage):
+    def _request(
+        self,
+        method: str,
+        url: str,
+        body: Optional[list[dict[str, Any]]] = None,
+        *,
+        prefer: str = "",
+    ) -> Any:
+        self.requests.append((method, url, body, prefer))
+        if method == "GET":
+            return []
+        raise TimeoutError("remote unavailable")
+
+
 class StateStorageTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -86,6 +101,24 @@ class StateStorageTests(unittest.TestCase):
         self.assertEqual(len(posts), 2)
         self.assertIn("/bot_state_files", posts[0][1])
         self.assertIn("/bot_state_file_versions", posts[1][1])
+
+    def test_failed_remote_save_is_throttled_before_retry(self) -> None:
+        storage = FailingSaveStorage(self.data_dir, remote_save_interval_seconds=60)
+        path = self.data_dir / "state.json"
+
+        storage.save_json("state.json", path, {"value": 1})
+        storage.save_json("state.json", path, {"value": 2})
+        storage.flush_pending()
+
+        posts = [request for request in storage.requests if request[0] == "POST"]
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(storage.pending_remote_writes, {"state.json"})
+
+        storage._last_remote_save_at["state.json"] = datetime.now(timezone.utc) - timedelta(seconds=61)
+        storage.flush_pending()
+
+        posts = [request for request in storage.requests if request[0] == "POST"]
+        self.assertEqual(len(posts), 2)
 
 
 if __name__ == "__main__":

@@ -79,6 +79,7 @@ SUPABASE_STATE_ENABLED=true
 SUPABASE_STATE_TABLE=bot_state_files
 SUPABASE_VERSIONS_TABLE=bot_state_file_versions
 SUPABASE_BOOTSTRAP_LOCAL=false
+SUPABASE_TIMEOUT_SECONDS=12
 SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS=60
 SUPABASE_VERSIONING_ENABLED=false
 SUPABASE_VERSION_INTERVAL_SECONDS=3600
@@ -157,6 +158,13 @@ Tambien se aceptan `SUPABASE_SERVICE_KEY` o `SUPABASE_KEY` si ya las tienes crea
 
 `SUPABASE_BOOTSTRAP_LOCAL=false` evita subir datos precargados del repo cuando falta una fila remota.
 Para migrar un JSON local existente hacia Supabase, cambialo temporalmente a `true`.
+
+`SUPABASE_TIMEOUT_SECONDS=12` da mas tiempo a Supabase para responder en Render. Si ves
+`The read operation timed out` en los logs, subelo a `20`.
+
+`SUPABASE_REMOTE_SAVE_INTERVAL_SECONDS` tambien actua como pausa entre reintentos cuando Supabase
+esta caido o saturado. Si la instancia esta recuperandose de memoria/swap, usa temporalmente `180`
+o `300` para bajar presion.
 
 `SUPABASE_VERSIONING_ENABLED=false` evita llenar `bot_state_file_versions` con copias completas de los
 JSON en cada guardado. Si necesitas auditoria historica, cambialo a `true`; en ese caso

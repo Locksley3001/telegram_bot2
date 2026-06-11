@@ -43,6 +43,7 @@ class MarketEngine:
             state_table=settings.supabase_state_table,
             versions_table=settings.supabase_versions_table,
             bootstrap_local=settings.supabase_bootstrap_local,
+            timeout_seconds=settings.supabase_timeout_seconds,
             remote_save_interval_seconds=settings.supabase_remote_save_interval_seconds,
             versioning_enabled=settings.supabase_versioning_enabled,
             version_interval_seconds=settings.supabase_version_interval_seconds,

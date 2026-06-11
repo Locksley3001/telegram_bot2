@@ -183,6 +183,7 @@ class StateStorage:
         except Exception as exc:
             self.last_error = f"Supabase save {name}: {exc}"
             self.connected = False
+            self._last_remote_save_at[name] = now
             LOGGER.warning(self.last_error)
             return False
 
