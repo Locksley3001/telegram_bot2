@@ -8,7 +8,7 @@ from typing import Dict, Iterable, List, Optional, Set
 
 from telegram import Bot
 
-from app.models import Signal, SignalOutcome
+from app.models import BalanceEvent, Signal, SignalOutcome, VirtualBalanceSummary
 from app.state_storage import StateStorage
 
 LOGGER = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class TelegramNotifier:
         self._bot: Optional[Bot] = Bot(token=token) if token and chat_id else None
         self._sent_ids: Set[str] = set()
         self._result_sent_ids: Set[str] = set()
+        self._balance_event_sent_ids: Set[str] = set()
         self._summary_pending: List[Dict[str, object]] = []
         self._summaries_sent = 0
         self._state_lock = asyncio.Lock()
@@ -79,6 +80,27 @@ class TelegramNotifier:
             await self._send_outcome_unlocked(record)
             await self._send_due_summaries(virtual_balance=virtual_balance)
 
+    async def send_balance_events(self, wallet: VirtualBalanceSummary) -> None:
+        async with self._state_lock:
+            if self._bot is None:
+                return
+            for event in wallet.history:
+                if not self._is_balance_reset_event(event):
+                    continue
+                event_id = self._balance_event_id(event)
+                if event_id in self._balance_event_sent_ids:
+                    continue
+                text = self._balance_event_text(event)
+                try:
+                    await self._send_message(chat_id=self.chat_id, text=text)
+                    self._balance_event_sent_ids.add(event_id)
+                    self._save_state()
+                    self.last_error = None
+                except Exception:
+                    self.last_error = "No se pudo enviar el evento de saldo por Telegram."
+                    LOGGER.exception("No se pudo enviar el evento de saldo por Telegram")
+                    return
+
     def remember_signals(self, signal_ids: Iterable[str]) -> None:
         changed = False
         for signal_id in signal_ids:
@@ -93,6 +115,18 @@ class TelegramNotifier:
         for outcome_id in outcome_ids:
             if outcome_id and outcome_id not in self._result_sent_ids:
                 self._result_sent_ids.add(outcome_id)
+                changed = True
+        if changed:
+            self._save_state()
+
+    def remember_balance_events(self, events: Iterable[BalanceEvent]) -> None:
+        changed = False
+        for event in events:
+            if not self._is_balance_reset_event(event):
+                continue
+            event_id = self._balance_event_id(event)
+            if event_id and event_id not in self._balance_event_sent_ids:
+                self._balance_event_sent_ids.add(event_id)
                 changed = True
         if changed:
             self._save_state()
@@ -232,6 +266,42 @@ class TelegramNotifier:
         }
 
     @staticmethod
+    def _is_balance_reset_event(event: BalanceEvent) -> bool:
+        mark = event.mark.strip().upper()
+        return mark.startswith("[QUIEBRA #") or mark.startswith("[META #")
+
+    @staticmethod
+    def _balance_event_id(event: BalanceEvent) -> str:
+        return f"{event.timestamp.isoformat()}:{event.mark.strip().upper()}"
+
+    @staticmethod
+    def _balance_event_text(event: BalanceEvent) -> str:
+        mark = event.mark.strip().upper()
+        count = TelegramNotifier._mark_count(mark)
+        if mark.startswith("[META #"):
+            return (
+                f"\u2705\u2705\u2705 META ALCANZADA \u2705\u2705\u2705\n"
+                f"Metas totales: {count}\n"
+                f"Saldo reiniciado: {TelegramNotifier._format_money(event.balance)}\n"
+                f"Detalle: {event.note or 'Meta alcanzada.'}\n"
+                f"Hora: {event.timestamp.astimezone().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        return (
+            f"\u274c\u274c\u274c QUIEBRA DEL SISTEMA \u274c\u274c\u274c\n"
+            f"Quiebras totales: {count}\n"
+            f"Saldo reiniciado: {TelegramNotifier._format_money(event.balance)}\n"
+            f"Detalle: {event.note or 'Saldo por debajo del umbral.'}\n"
+            f"Hora: {event.timestamp.astimezone().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+    @staticmethod
+    def _mark_count(mark: str) -> int:
+        try:
+            return int(mark.split("#", 1)[1].split("]", 1)[0])
+        except (IndexError, ValueError):
+            return 0
+
+    @staticmethod
     def _status_label(status: str) -> str:
         if status == "win":
             return "GANADA"
@@ -265,6 +335,7 @@ class TelegramNotifier:
         try:
             self._sent_ids = set(str(item) for item in payload.get("signal_sent_ids", []))
             self._result_sent_ids = set(str(item) for item in payload.get("result_sent_ids", []))
+            self._balance_event_sent_ids = set(str(item) for item in payload.get("balance_event_sent_ids", []))
             self._summary_pending = [
                 item for item in payload.get("summary_pending", []) if isinstance(item, dict) and item.get("id")
             ]
@@ -278,6 +349,7 @@ class TelegramNotifier:
         payload = {
             "signal_sent_ids": sorted(self._sent_ids),
             "result_sent_ids": sorted(self._result_sent_ids),
+            "balance_event_sent_ids": sorted(self._balance_event_sent_ids),
             "summary_pending": self._summary_pending,
             "summaries_sent": self._summaries_sent,
         }

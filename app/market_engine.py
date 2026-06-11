@@ -103,6 +103,9 @@ class MarketEngine:
             for record in self.performance.records.values()
             if not record.is_shadow and record.status in {"win", "loss", "push", "aborted"}
         )
+        self.notifier.remember_balance_events(
+            self.performance.virtual_balance(timeframe=self.timeframe).history
+        )
         self.last_error: Optional[str] = None
         self.broker_status = "iniciando"
         self._last_signal_at: Dict[str, datetime] = {}
@@ -254,9 +257,14 @@ class MarketEngine:
             if resolved_records:
                 self.learning.rebuild(self.performance.records.values())
             pending_outcomes = self.notifier.pending_outcomes(self.performance.records.values())
+            wallet_for_notifications = None
             if pending_outcomes:
-                wallet = self.performance.virtual_balance(timeframe=self.timeframe)
-                await self.notifier.send_outcomes(pending_outcomes, virtual_balance=wallet.balance)
+                wallet_for_notifications = self.performance.virtual_balance(timeframe=self.timeframe)
+                await self.notifier.send_outcomes(pending_outcomes, virtual_balance=wallet_for_notifications.balance)
+            if self.notifier.enabled:
+                if wallet_for_notifications is None:
+                    wallet_for_notifications = self.performance.virtual_balance(timeframe=self.timeframe)
+                await self.notifier.send_balance_events(wallet_for_notifications)
             zones, signal, context = self.analyzer.analyze(asset, self.timeframe, candles)
             if signal is not None:
                 signal, context = self._apply_balance_rules(signal, context)
