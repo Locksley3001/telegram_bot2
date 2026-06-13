@@ -81,13 +81,15 @@ class MarketEngine:
             self._data_dir / "learning.json",
             storage=self.storage,
             enabled=settings.learning_enabled,
+            update_enabled=settings.learning_update_enabled,
             min_history=settings.learning_min_history,
             min_win_rate=settings.learning_min_win_rate,
             min_rule_samples=settings.learning_min_rule_samples,
             min_similarity_samples=settings.learning_min_similarity_samples,
             exploration_interval=settings.learning_exploration_interval,
         )
-        self.learning.rebuild(self.performance.records.values())
+        if settings.learning_update_enabled:
+            self.learning.rebuild(self.performance.records.values())
         configured_markets = {self._normalize_market_label(market) for market in settings.market_list}
         configured_markets.discard("")
         self.active_markets: Set[str] = set(configured_markets)

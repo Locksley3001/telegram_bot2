@@ -36,6 +36,7 @@ class SignalLearningSystem:
         storage: Optional[StateStorage] = None,
         *,
         enabled: bool = True,
+        update_enabled: bool = True,
         min_history: int = 30,
         min_win_rate: float = 58.0,
         min_rule_samples: int = 5,
@@ -45,6 +46,7 @@ class SignalLearningSystem:
         self.path = path
         self.storage = storage
         self.enabled = enabled
+        self.update_enabled = update_enabled
         self.min_history = max(1, min_history)
         self.min_win_rate = max(1.0, min(95.0, min_win_rate))
         self.min_rule_samples = max(1, min_rule_samples)
@@ -68,6 +70,9 @@ class SignalLearningSystem:
         self._load_decision_counters()
 
     def rebuild(self, records: Iterable[SignalOutcome]) -> None:
+        if not self.update_enabled:
+            return
+
         resolved = [
             record
             for record in records
@@ -449,31 +454,39 @@ class SignalLearningSystem:
         else:
             payload = StateStorage._load_local(self.path) or {}
         try:
-            self.allowed_signals = int(payload.get("allowed_signals", 0))
-            self.blocked_signals = int(payload.get("blocked_signals", 0))
-            self.exploration_signals = int(payload.get("exploration_signals", 0))
+            self.rules = payload.get("rules", {}) or {}
+            self.resolved_examples = int(payload.get("resolved_examples", self.resolved_examples))
+            self.wins = int(payload.get("wins", self.wins))
+            self.losses = int(payload.get("losses", self.losses))
+            self.real_examples = int(payload.get("real_examples", self.real_examples))
+            self.shadow_examples = int(payload.get("shadow_examples", self.shadow_examples))
+            self.shadow_wins = int(payload.get("shadow_wins", self.shadow_wins))
+            self.shadow_losses = int(payload.get("shadow_losses", self.shadow_losses))
+            self.allowed_signals = int(payload.get("allowed_signals", self.allowed_signals))
+            self.blocked_signals = int(payload.get("blocked_signals", self.blocked_signals))
+            self.exploration_signals = int(payload.get("exploration_signals", self.exploration_signals))
             self.block_recommendations = int(
                 payload.get("block_recommendations", self.blocked_signals + self.exploration_signals)
             )
-            self.last_decision = str(payload.get("last_decision", ""))
-            self.real_examples = int(payload.get("real_examples", 0))
-            self.shadow_examples = int(payload.get("shadow_examples", 0))
-            self.shadow_wins = int(payload.get("shadow_wins", 0))
-            self.shadow_losses = int(payload.get("shadow_losses", 0))
-            self._signature = str(payload.get("signature", ""))
+            self.last_decision = str(payload.get("last_decision", self.last_decision))
+            self._signature = str(payload.get("signature", self._signature))
             updated_at = payload.get("updated_at")
             if isinstance(updated_at, str) and updated_at:
                 self.updated_at = datetime.fromisoformat(updated_at)
         except Exception:
+            self.rules = {}
+            self.resolved_examples = 0
+            self.wins = 0
+            self.losses = 0
+            self.real_examples = 0
+            self.shadow_examples = 0
+            self.shadow_wins = 0
+            self.shadow_losses = 0
             self.allowed_signals = 0
             self.blocked_signals = 0
             self.exploration_signals = 0
             self.block_recommendations = 0
             self.last_decision = ""
-            self.real_examples = 0
-            self.shadow_examples = 0
-            self.shadow_wins = 0
-            self.shadow_losses = 0
             self._signature = ""
 
     @staticmethod

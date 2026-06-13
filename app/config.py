@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     signal_history_limit: int = Field(default=500, alias="SIGNAL_HISTORY_LIMIT")
     api_signal_limit: int = Field(default=500, alias="API_SIGNAL_LIMIT")
     learning_enabled: bool = Field(default=True, alias="LEARNING_ENABLED")
+    learning_update_enabled: bool = Field(default=True, alias="LEARNING_UPDATE_ENABLED")
     learning_min_history: int = Field(default=30, alias="LEARNING_MIN_HISTORY")
     learning_min_win_rate: float = Field(default=58.0, alias="LEARNING_MIN_WIN_RATE")
     learning_min_rule_samples: int = Field(default=5, alias="LEARNING_MIN_RULE_SAMPLES")
