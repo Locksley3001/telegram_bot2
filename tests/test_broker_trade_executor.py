@@ -73,6 +73,17 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second, [])
         self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
 
+    async def test_places_due_waiting_entry_record(self) -> None:
+        broker = FakeBroker()
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
+        record = make_record(status="waiting_entry")
+
+        trades = await executor.execute_due("EURUSD-OTC", [record], broker)
+
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0].status, "placed")
+        self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
+
     async def test_ignores_aborted_record(self) -> None:
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
@@ -87,7 +98,7 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
         now = utc_now()
-        record = make_record(entry_at=now - timedelta(seconds=10), expires_at=now + timedelta(seconds=50))
+        record = make_record(entry_at=now - timedelta(seconds=20), expires_at=now + timedelta(seconds=40))
 
         trades = await executor.execute_due("EURUSD-OTC", [record], broker)
 
