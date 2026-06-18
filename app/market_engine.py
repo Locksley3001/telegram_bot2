@@ -327,10 +327,23 @@ class MarketEngine:
                         self._emitted_signal_ids = {item.id for item in self.signals[-self._signal_history_limit :]}
                     emit_signal = signal
             if emit_signal is not None:
+                await self._execute_fresh_signal(asset, emit_signal.id, candles)
                 await self.notifier.send_signal(emit_signal)
         except Exception as exc:
             self.last_error = f"{asset}: {exc}"
             LOGGER.exception("Fallo analizando %s", asset)
+
+    async def _execute_fresh_signal(self, asset: str, signal_id: str, candles) -> None:
+        record = self.performance.records.get(signal_id)
+        if record is None:
+            return
+        self.performance.evaluate(asset, candles, self.analyzer.abort_pending_reason)
+        record = self.performance.records.get(signal_id)
+        if record is None:
+            return
+        executed_trades = await self.trade_executor.execute_due(asset, [record], self.broker)
+        if executed_trades:
+            LOGGER.info("Operacion enviada a IQ Option para senal nueva %s", signal_id)
 
     def _remember_learning_event(self, asset: str, context: dict) -> None:
         event = str(context.get("learning_event") or "").strip()
