@@ -3,6 +3,8 @@ const state = {
   selectedAsset: null,
   currentView: "chart",
   socket: null,
+  socketRetryMs: 1500,
+  refreshRetryMs: 3000,
   audioContext: null,
   audioEnabled: false,
   chartSize: { width: 0, height: 0, dpr: 1 },
@@ -89,6 +91,10 @@ function connectSocket() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   state.socket = new WebSocket(`${protocol}://${window.location.host}/ws`);
 
+  state.socket.addEventListener("open", () => {
+    state.socketRetryMs = 1500;
+  });
+
   state.socket.addEventListener("message", (event) => {
     state.data = JSON.parse(event.data);
     detectNewSignalsAndNotify(state.data.signals || []).catch(() => {});
@@ -96,8 +102,16 @@ function connectSocket() {
     render();
   });
 
+  state.socket.addEventListener("error", () => {
+    if (state.socket) {
+      state.socket.close();
+    }
+  });
+
   state.socket.addEventListener("close", () => {
-    setTimeout(connectSocket, 1500);
+    const retryIn = state.socketRetryMs;
+    state.socketRetryMs = Math.min(30000, Math.round(state.socketRetryMs * 1.8));
+    setTimeout(connectSocket, retryIn);
   });
 }
 
@@ -131,9 +145,17 @@ async function refreshState() {
     state.data = data;
     ensureSelectedAsset();
     render();
+    const socketOpen = state.socket && state.socket.readyState === WebSocket.OPEN;
+    state.refreshRetryMs = socketOpen ? 10000 : 3000;
   } catch (error) {
-    // The websocket reconnect path will keep trying too.
+    state.refreshRetryMs = Math.min(30000, Math.round(state.refreshRetryMs * 1.8));
   }
+}
+
+function scheduleStateRefresh() {
+  refreshState().finally(() => {
+    setTimeout(scheduleStateRefresh, state.refreshRetryMs);
+  });
 }
 
 async function responseErrorText(response) {
@@ -772,7 +794,7 @@ document.addEventListener(
 window.addEventListener("resize", () => renderSnapshot());
 renderView();
 connectSocket();
-setInterval(refreshState, 3000);
+scheduleStateRefresh();
 
 async function detectNewSignalsAndNotify(signals) {
   try {
