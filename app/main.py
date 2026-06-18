@@ -99,7 +99,11 @@ async def get_broker_trades():
 
 @app.post("/api/broker/trading")
 async def set_broker_trading(payload: EnabledPayload):
-    return await engine.set_broker_trading_enabled(payload.enabled)
+    state = await engine.set_broker_trading_enabled(payload.enabled)
+    if payload.enabled and not state.broker_trading.enabled:
+        detail = state.last_error or "No se pudo conectar IQ Option para activar operaciones reales."
+        raise HTTPException(status_code=503, detail=detail)
+    return state
 
 
 @app.post("/api/telegram/test")

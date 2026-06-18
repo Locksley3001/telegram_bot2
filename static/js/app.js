@@ -904,17 +904,25 @@ async function testTelegram() {
 async function toggleBrokerTrading() {
   if (!state.data || !els.brokerConnectButton) return;
   const current = Boolean(state.data.broker_trading?.enabled);
+  const desired = !current;
   els.brokerConnectButton.disabled = true;
-  setTestFeedback(current ? "Desconectando broker..." : "Conectando broker...", false);
+  setTestFeedback(desired ? "Conectando broker..." : "Desconectando broker...", false);
   try {
     const data = await apiRequest("/api/broker/trading", {
       method: "POST",
-      body: JSON.stringify({ enabled: !current }),
+      body: JSON.stringify({ enabled: desired }),
     });
     state.data = data;
     ensureSelectedAsset();
     render();
-    setTestFeedback(!current ? "Broker real conectado." : "Broker real desconectado.", false);
+    const enabled = Boolean(data.broker_trading?.enabled);
+    if (desired && enabled) {
+      setTestFeedback("Broker real conectado.", false);
+    } else if (!desired && !enabled) {
+      setTestFeedback("Broker real desconectado.", false);
+    } else {
+      setTestFeedback("El broker no cambio de estado. Revisa la conexion de IQ Option.", true);
+    }
   } catch (error) {
     setTestFeedback(`Error broker: ${error.message || String(error)}`, true);
   } finally {

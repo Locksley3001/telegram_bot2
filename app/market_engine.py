@@ -216,6 +216,7 @@ class MarketEngine:
                 await self._ensure_connection()
                 markets = sorted(self.active_markets)
                 if self.broker.connected and markets:
+                    await self._execute_due_broker_trades(markets)
                     await asyncio.gather(*(self._analyze_market(asset) for asset in markets))
                     self.broker_status = "conectado a IQ Option"
                 await self._broadcast()
@@ -345,6 +346,19 @@ class MarketEngine:
         if executed_trades:
             LOGGER.info("Operacion enviada a IQ Option para senal nueva %s", signal_id)
 
+    async def _execute_due_broker_trades(self, markets: List[str]) -> None:
+        if not self.trade_executor.enabled:
+            return
+        records = list(self.performance.records.values())
+        for asset in markets:
+            executed_trades = await self.trade_executor.execute_due(asset, records, self.broker)
+            if executed_trades:
+                LOGGER.info(
+                    "Operaciones pendientes enviadas a IQ Option para %s: %s",
+                    asset,
+                    [trade.signal_id for trade in executed_trades],
+                )
+
     def _remember_learning_event(self, asset: str, context: dict) -> None:
         event = str(context.get("learning_event") or "").strip()
         if not event:
@@ -421,6 +435,10 @@ class MarketEngine:
             return False
         if signal.id in self._emitted_signal_ids:
             return False
+        if self.trade_executor.enabled and signal.pending_execution_at is not None:
+            entry_delay = (utc_now() - signal.pending_execution_at).total_seconds()
+            if entry_delay > self.trade_executor.entry_window_seconds:
+                return False
         previous = self._last_signal_at.get(self._cooldown_key(signal))
         if previous is None:
             return True
