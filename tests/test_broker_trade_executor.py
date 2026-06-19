@@ -29,6 +29,17 @@ class FlakyBroker(FakeBroker):
         return self.responses.pop(0)
 
 
+class MutatingBroker(FakeBroker):
+    def __init__(self, record_to_abort: SignalOutcome) -> None:
+        super().__init__()
+        self.record_to_abort = record_to_abort
+
+    async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
+        result = await super().place_option_trade(asset, direction, amount, expiration_seconds)
+        self.record_to_abort.status = "aborted"
+        return result
+
+
 def make_record(**overrides: object) -> SignalOutcome:
     now = utc_now()
     payload = {
@@ -83,16 +94,15 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second, [])
         self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
 
-    async def test_places_due_waiting_entry_record(self) -> None:
+    async def test_ignores_waiting_entry_record_until_virtual_confirms_entry(self) -> None:
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
         record = make_record(status="waiting_entry")
 
         trades = await executor.execute_due("EURUSD-OTC", [record], broker)
 
-        self.assertEqual(len(trades), 1)
-        self.assertEqual(trades[0].status, "placed")
-        self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
+        self.assertEqual(trades, [])
+        self.assertEqual(broker.calls, [])
 
     async def test_places_every_due_record_across_markets(self) -> None:
         broker = FakeBroker()
@@ -134,6 +144,31 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
                 ("GBPUSD-OTC", "PUT", 10000, 60),
             ],
         )
+
+    async def test_execute_all_due_revalidates_each_record_before_placing(self) -> None:
+        now = utc_now()
+        first = make_record(
+            id="EURUSD-OTC:60:CALL:test",
+            asset="EURUSD-OTC",
+            entry_at=now,
+            expires_at=now + timedelta(seconds=60),
+        )
+        second = make_record(
+            id="GBPUSD-OTC:60:PUT:test",
+            asset="GBPUSD-OTC",
+            direction="PUT",
+            entry_at=now,
+            expires_at=now + timedelta(seconds=60),
+        )
+        broker = MutatingBroker(second)
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
+
+        trades = await executor.execute_all_due([first, second], broker)
+
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0].signal_id, first.id)
+        self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
+        self.assertNotIn(second.id, executor.trades)
 
     async def test_ignores_aborted_record(self) -> None:
         broker = FakeBroker()

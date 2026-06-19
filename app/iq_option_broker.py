@@ -198,7 +198,16 @@ class IQOptionBroker(BrokerInterface):
                         action,
                         duration_minutes,
                     )
-                except Exception:
+                except Exception as exc:
+                    last_detail = str(exc or "IQ Option rechazo el activo.")
+                    if isinstance(exc, KeyError) or self._can_retry_asset_name(last_detail):
+                        LOGGER.warning(
+                            "IQ Option rechazo el alias %s para %s: %s",
+                            asset_name,
+                            asset,
+                            last_detail,
+                        )
+                        continue
                     self._connected = False
                     raise
 
@@ -313,7 +322,12 @@ class IQOptionBroker(BrokerInterface):
     @staticmethod
     def _can_retry_asset_name(detail: str) -> bool:
         normalized = detail.lower()
-        return "not available" in normalized or "cannot purchase" in normalized
+        return (
+            "not available" in normalized
+            or "cannot purchase" in normalized
+            or "not found" in normalized
+            or "asset is closed" in normalized
+        )
 
     @staticmethod
     def _get_value(raw: Any, names: Iterable[str], default: Any = None) -> Any:

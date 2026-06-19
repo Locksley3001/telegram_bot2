@@ -49,6 +49,17 @@ class FakeBuyClient:
         return True, "order-1"
 
 
+class KeyErrorBuyClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[float, str, str, int]] = []
+
+    def buy(self, amount: float, asset: str, action: str, duration: int):
+        self.calls.append((amount, asset, action, duration))
+        if asset == "USDJPY-OTC":
+            return False, "Cannot purchase an option (the asset is not available at the moment)."
+        raise KeyError(asset)
+
+
 class IQOptionBrokerTests(unittest.IsolatedAsyncioTestCase):
     async def test_realtime_candles_are_normalized_from_snapshot_values(self) -> None:
         broker = IQOptionBroker("", "")
@@ -95,6 +106,25 @@ class IQOptionBrokerTests(unittest.IsolatedAsyncioTestCase):
                 (10000.0, "BTCUSD-OTC-op", "call", 1),
                 (10000.0, "BTCUSD-OTC", "call", 1),
                 (10000.0, "BTC/USD-OTC", "call", 1),
+            ],
+        )
+
+    async def test_place_option_trade_treats_missing_alias_as_controlled_failure(self) -> None:
+        client = KeyErrorBuyClient()
+        broker = IQOptionBroker("", "")
+        broker._client = client
+        broker._connected = True
+
+        success, detail = await broker.place_option_trade("USDJPY-OTC", "CALL", 10000, 60)
+
+        self.assertFalse(success)
+        self.assertIn("USD/JPY-OTC", detail)
+        self.assertTrue(broker.connected)
+        self.assertEqual(
+            client.calls,
+            [
+                (10000.0, "USDJPY-OTC", "call", 1),
+                (10000.0, "USD/JPY-OTC", "call", 1),
             ],
         )
 
