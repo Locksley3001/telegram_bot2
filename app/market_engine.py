@@ -225,6 +225,7 @@ class MarketEngine:
                 markets = sorted(self.active_markets)
                 if self.broker.connected and markets:
                     await asyncio.gather(*(self._analyze_market(asset) for asset in markets))
+                    await self._execute_due_broker_trades(markets)
                     self.broker_status = "conectado a IQ Option"
                 await self._broadcast()
             except asyncio.CancelledError:
@@ -445,7 +446,17 @@ class MarketEngine:
             await asyncio.sleep(retry_interval)
 
     async def _execute_due_broker_trades(self, markets: List[str]) -> None:
-        return
+        if not self.trade_executor.enabled:
+            return
+        market_set = set(markets)
+        records = [
+            record
+            for record in self.performance.records.values()
+            if record.asset in market_set
+        ]
+        executed_trades = await self.trade_executor.execute_all_due(records, self.broker)
+        if executed_trades:
+            LOGGER.info("Sincronizadas %s operacion(es) pendientes con IQ Option", len(executed_trades))
 
     def _remember_learning_event(self, asset: str, context: dict) -> None:
         event = str(context.get("learning_event") or "").strip()

@@ -141,7 +141,7 @@ def make_outcome(signal: Signal) -> SignalOutcome:
 
 
 class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
-    async def test_execute_due_broker_trades_does_not_sweep_history_records(self) -> None:
+    async def test_execute_due_broker_trades_sweeps_only_active_market_records(self) -> None:
         engine = object.__new__(MarketEngine)
         engine.trade_executor = FakeTradeExecutor(enabled=True)
         engine.performance = SimpleNamespace(
@@ -156,7 +156,7 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         await engine._execute_due_broker_trades(["EURUSD-OTC", "GBPUSD-OTC"])
 
         self.assertEqual(engine.trade_executor.calls, [])
-        self.assertEqual(engine.trade_executor.all_due_calls, [])
+        self.assertEqual(engine.trade_executor.all_due_calls, [["one", "two"]])
 
     async def test_execute_due_broker_trades_skips_when_disabled(self) -> None:
         engine = object.__new__(MarketEngine)

@@ -189,7 +189,12 @@ class IQOptionBroker(BrokerInterface):
 
         last_detail = "IQ Option rechazo la compra."
         async with self._request_lock:
+            active_codes = self._safe_get_active_codes(client)
             for asset_name in asset_candidates:
+                if active_codes and asset_name not in active_codes:
+                    last_detail = f"Activo {asset_name} no existe en ACTIVES_OPCODE."
+                    LOGGER.warning("IQ Option no tiene opcode para el alias %s de %s", asset_name, asset)
+                    continue
                 try:
                     success, order_id = await asyncio.to_thread(
                         client.buy,
@@ -215,10 +220,56 @@ class IQOptionBroker(BrokerInterface):
                     return True, str(order_id)
 
                 last_detail = str(order_id or "IQ Option rechazo la compra.")
+                if (
+                    duration_minutes <= 5
+                    and callable(getattr(client, "buy_by_raw_expirations", None))
+                    and self._can_try_binary_raw(last_detail)
+                ):
+                    try:
+                        raw_success, raw_order_id = await asyncio.to_thread(
+                            self._buy_binary_raw,
+                            client,
+                            float(amount),
+                            asset_name,
+                            action,
+                            duration_minutes,
+                        )
+                    except Exception as exc:
+                        last_detail = str(exc or "IQ Option rechazo compra binary.")
+                    else:
+                        if raw_success is True:
+                            return True, str(raw_order_id)
+                        last_detail = str(raw_order_id or last_detail)
                 if not self._can_retry_asset_name(last_detail):
                     break
 
         return False, last_detail
+
+    @staticmethod
+    def _safe_get_active_codes(client: Any) -> dict:
+        get_codes = getattr(client, "get_all_ACTIVES_OPCODE", None)
+        if not callable(get_codes):
+            return {}
+        try:
+            data = get_codes()
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            LOGGER.exception("No se pudo consultar ACTIVES_OPCODE antes de comprar")
+            return {}
+
+    @staticmethod
+    def _buy_binary_raw(client: Any, amount: float, asset_name: str, action: str, duration_minutes: int) -> tuple[bool, Any]:
+        from iqoptionapi.expiration import get_expiration_time
+
+        server_timestamp = int(getattr(getattr(client, "api", None), "timesync", None).server_timestamp)
+        expiration, _ = get_expiration_time(server_timestamp, duration_minutes)
+        return client.buy_by_raw_expirations(
+            amount,
+            asset_name,
+            action,
+            "binary",
+            int(expiration),
+        )
 
     async def start_realtime_candles(self, asset: str, timeframe: int) -> None:
         await self._ensure_connection()
@@ -328,6 +379,11 @@ class IQOptionBroker(BrokerInterface):
             or "not found" in normalized
             or "asset is closed" in normalized
         )
+
+    @classmethod
+    def _can_try_binary_raw(cls, detail: str) -> bool:
+        normalized = detail.lower()
+        return cls._can_retry_asset_name(detail) or "time for purchasing options is over" in normalized
 
     @staticmethod
     def _get_value(raw: Any, names: Iterable[str], default: Any = None) -> Any:

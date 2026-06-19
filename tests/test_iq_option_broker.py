@@ -60,6 +60,48 @@ class KeyErrorBuyClient:
         raise KeyError(asset)
 
 
+class ActiveCodeBuyClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[float, str, str, int]] = []
+
+    def get_all_open_time(self):
+        return {
+            "turbo": {"USDJPY-OTC": {"open": True}},
+            "binary": {"USDJPY-OTC": {"open": True}},
+        }
+
+    def get_all_ACTIVES_OPCODE(self):
+        return {"USDJPY-OTC": 85}
+
+    def buy(self, amount: float, asset: str, action: str, duration: int):
+        self.calls.append((amount, asset, action, duration))
+        return False, "Cannot purchase an option (the asset is not available at the moment)."
+
+
+class BinaryOnlyBuyClient:
+    def __init__(self) -> None:
+        self.raw_calls: list[tuple[float, str, str, str, int]] = []
+        self.buy_calls: list[tuple[float, str, str, int]] = []
+        self.api = type("Api", (), {"timesync": type("TimeSync", (), {"server_timestamp": 1_781_883_000})()})()
+
+    def get_all_open_time(self):
+        return {
+            "turbo": {},
+            "binary": {"USDJPY-OTC": {"open": True}},
+        }
+
+    def get_all_ACTIVES_OPCODE(self):
+        return {"USDJPY-OTC": 85}
+
+    def buy(self, amount: float, asset: str, action: str, duration: int):
+        self.buy_calls.append((amount, asset, action, duration))
+        return False, "Cannot purchase an option (the asset is not available at the moment)."
+
+    def buy_by_raw_expirations(self, amount: float, asset: str, action: str, option: str, expiration: int):
+        self.raw_calls.append((amount, asset, action, option, expiration))
+        return True, "raw-order-1"
+
+
 class IQOptionBrokerTests(unittest.IsolatedAsyncioTestCase):
     async def test_realtime_candles_are_normalized_from_snapshot_values(self) -> None:
         broker = IQOptionBroker("", "")
@@ -127,6 +169,37 @@ class IQOptionBrokerTests(unittest.IsolatedAsyncioTestCase):
                 (10000.0, "USD/JPY-OTC", "call", 1),
             ],
         )
+
+    async def test_place_option_trade_skips_fx_slash_alias_missing_from_opcode(self) -> None:
+        client = ActiveCodeBuyClient()
+        broker = IQOptionBroker("", "")
+        broker._client = client
+        broker._connected = True
+
+        success, detail = await broker.place_option_trade("USDJPY-OTC", "CALL", 10000, 60)
+
+        self.assertFalse(success)
+        self.assertIn("USD/JPY-OTC", detail)
+        self.assertEqual(
+            client.calls,
+            [
+                (10000.0, "USDJPY-OTC", "call", 1),
+            ],
+        )
+
+    async def test_place_option_trade_uses_binary_raw_when_turbo_is_closed(self) -> None:
+        client = BinaryOnlyBuyClient()
+        broker = IQOptionBroker("", "")
+        broker._client = client
+        broker._connected = True
+
+        success, detail = await broker.place_option_trade("USDJPY-OTC", "PUT", 10000, 60)
+
+        self.assertTrue(success)
+        self.assertEqual(detail, "raw-order-1")
+        self.assertEqual(client.buy_calls, [(10000.0, "USDJPY-OTC", "put", 1)])
+        self.assertEqual(len(client.raw_calls), 1)
+        self.assertEqual(client.raw_calls[0][:4], (10000.0, "USDJPY-OTC", "put", "binary"))
 
 
 if __name__ == "__main__":

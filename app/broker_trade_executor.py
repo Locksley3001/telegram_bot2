@@ -60,7 +60,7 @@ class BrokerTradeExecutor:
 
             trades: List[BrokerTrade] = []
             for record in sorted(due_records, key=lambda item: item.entry_at or item.created_at):
-                if not self._is_due(asset, record, now=utc_now()):
+                if not self._is_due(asset, record, now=requested_now):
                     continue
                 trade = await self._place(record, broker)
                 trades.append(trade)
@@ -86,7 +86,7 @@ class BrokerTradeExecutor:
 
             trades: List[BrokerTrade] = []
             for record in sorted(due_records, key=lambda item: item.entry_at or item.created_at):
-                if not self._is_due(None, record, now=utc_now()):
+                if not self._is_due(None, record, now=requested_now):
                     continue
                 trade = await self._place(record, broker)
                 trades.append(trade)
