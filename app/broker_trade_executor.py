@@ -47,13 +47,38 @@ class BrokerTradeExecutor:
         records: Iterable[SignalOutcome],
         broker: BrokerInterface,
     ) -> List[BrokerTrade]:
+        requested_now = utc_now()
         if not self.enabled:
             return []
         if getattr(broker, "connected", True) is False:
             return []
 
         async with self._lock:
-            due_records = [record for record in records if self._is_due(asset, record)]
+            due_records = [record for record in records if self._is_due(asset, record, now=requested_now)]
+            if not due_records:
+                return []
+
+            trades: List[BrokerTrade] = []
+            for record in sorted(due_records, key=lambda item: item.entry_at or item.created_at):
+                trade = await self._place(record, broker)
+                trades.append(trade)
+                self.trades[record.id] = trade
+                self._save()
+            return trades
+
+    async def execute_all_due(
+        self,
+        records: Iterable[SignalOutcome],
+        broker: BrokerInterface,
+    ) -> List[BrokerTrade]:
+        requested_now = utc_now()
+        if not self.enabled:
+            return []
+        if getattr(broker, "connected", True) is False:
+            return []
+
+        async with self._lock:
+            due_records = [record for record in records if self._is_due(None, record, now=requested_now)]
             if not due_records:
                 return []
 
@@ -80,11 +105,13 @@ class BrokerTradeExecutor:
             recent_trades=trades[-limit:],
         )
 
-    def _is_due(self, asset: str, record: SignalOutcome) -> bool:
+    def _is_due(self, asset: Optional[str], record: SignalOutcome, *, now=None) -> bool:
         existing = self.trades.get(record.id)
         if existing is not None and existing.status == "placed":
             return False
-        if record.asset != asset or record.is_shadow:
+        if asset is not None and record.asset != asset:
+            return False
+        if record.is_shadow:
             return False
         if record.status not in {"waiting_entry", "pending"}:
             return False
@@ -93,7 +120,8 @@ class BrokerTradeExecutor:
         if record.entry_at is None:
             return False
 
-        now = utc_now()
+        if now is None:
+            now = utc_now()
         if record.expires_at <= now:
             return False
         entry_delay = (now - record.entry_at).total_seconds()

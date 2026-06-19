@@ -13,11 +13,17 @@ class FakeTradeExecutor:
         self.enabled = enabled
         self.entry_window_seconds = entry_window_seconds
         self.calls: list[tuple[str, int]] = []
+        self.all_due_calls: list[list[str]] = []
         self.trades = {}
 
     async def execute_due(self, asset, records, broker):
         records = list(records)
         self.calls.append((asset, len(records)))
+        return []
+
+    async def execute_all_due(self, records, broker):
+        records = list(records)
+        self.all_due_calls.append([record.id for record in records])
         return []
 
 
@@ -120,18 +126,22 @@ def make_outcome(signal: Signal) -> SignalOutcome:
 
 
 class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
-    async def test_execute_due_broker_trades_checks_all_markets(self) -> None:
+    async def test_execute_due_broker_trades_sends_all_active_markets_as_one_batch(self) -> None:
         engine = object.__new__(MarketEngine)
         engine.trade_executor = FakeTradeExecutor(enabled=True)
-        engine.performance = SimpleNamespace(records={"one": object(), "two": object()})
+        engine.performance = SimpleNamespace(
+            records={
+                "one": SimpleNamespace(id="one", asset="EURUSD-OTC"),
+                "two": SimpleNamespace(id="two", asset="GBPUSD-OTC"),
+                "ignored": SimpleNamespace(id="ignored", asset="SOLUSD-OTC"),
+            }
+        )
         engine.broker = object()
 
         await engine._execute_due_broker_trades(["EURUSD-OTC", "GBPUSD-OTC"])
 
-        self.assertEqual(
-            engine.trade_executor.calls,
-            [("EURUSD-OTC", 2), ("GBPUSD-OTC", 2)],
-        )
+        self.assertEqual(engine.trade_executor.calls, [])
+        self.assertEqual(engine.trade_executor.all_due_calls, [["one", "two"]])
 
     async def test_execute_due_broker_trades_skips_when_disabled(self) -> None:
         engine = object.__new__(MarketEngine)
@@ -143,7 +153,7 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(engine.trade_executor.calls, [])
 
-    def test_can_emit_rejects_stale_signal_when_broker_enabled(self) -> None:
+    def test_can_emit_does_not_reject_stale_signal_because_broker_is_enabled(self) -> None:
         engine = object.__new__(MarketEngine)
         engine.settings = SimpleNamespace(virtual_cautious_stake=10000, signal_cooldown_seconds=45)
         engine.trade_executor = FakeTradeExecutor(enabled=True, entry_window_seconds=12.0)
@@ -152,7 +162,7 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
 
         signal = make_signal(pending_delta_seconds=-20.0)
 
-        self.assertFalse(engine._can_emit(signal))
+        self.assertTrue(engine._can_emit(signal))
 
     def test_can_emit_allows_stale_signal_when_broker_disabled(self) -> None:
         engine = object.__new__(MarketEngine)

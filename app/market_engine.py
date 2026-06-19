@@ -432,15 +432,18 @@ class MarketEngine:
     async def _execute_due_broker_trades(self, markets: List[str]) -> None:
         if not self.trade_executor.enabled:
             return
-        records = list(self.performance.records.values())
-        for asset in markets:
-            executed_trades = await self.trade_executor.execute_due(asset, records, self.broker)
-            if executed_trades:
-                LOGGER.info(
-                    "Operaciones pendientes enviadas a IQ Option para %s: %s",
-                    asset,
-                    [trade.signal_id for trade in executed_trades],
-                )
+        market_set = set(markets)
+        records = [
+            record
+            for record in self.performance.records.values()
+            if record.asset in market_set
+        ]
+        executed_trades = await self.trade_executor.execute_all_due(records, self.broker)
+        if executed_trades:
+            LOGGER.info(
+                "Operaciones pendientes enviadas a IQ Option: %s",
+                [trade.signal_id for trade in executed_trades],
+            )
 
     def _remember_learning_event(self, asset: str, context: dict) -> None:
         event = str(context.get("learning_event") or "").strip()
@@ -518,10 +521,6 @@ class MarketEngine:
             return False
         if signal.id in self._emitted_signal_ids:
             return False
-        if self.trade_executor.enabled and signal.pending_execution_at is not None:
-            entry_delay = (utc_now() - signal.pending_execution_at).total_seconds()
-            if entry_delay > self.trade_executor.entry_window_seconds:
-                return False
         previous = self._last_signal_at.get(self._cooldown_key(signal))
         if previous is None:
             return True

@@ -107,14 +107,32 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
             for asset in assets
         ]
 
-        trades = []
-        for asset in assets:
-            trades.extend(await executor.execute_due(asset, records, broker))
+        trades = await executor.execute_all_due(records, broker)
 
         self.assertEqual(len(trades), len(assets))
         self.assertEqual(
             broker.calls,
             [(asset, "CALL", 10000, 60) for asset in assets],
+        )
+
+    async def test_execute_all_due_uses_one_due_snapshot_for_simultaneous_records(self) -> None:
+        broker = FakeBroker()
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
+        now = utc_now()
+        records = [
+            make_record(id="EURUSD-OTC:60:CALL:test", asset="EURUSD-OTC", entry_at=now, expires_at=now + timedelta(seconds=60)),
+            make_record(id="GBPUSD-OTC:60:PUT:test", asset="GBPUSD-OTC", direction="PUT", entry_at=now, expires_at=now + timedelta(seconds=60)),
+        ]
+
+        trades = await executor.execute_all_due(records, broker)
+
+        self.assertEqual(len(trades), 2)
+        self.assertEqual(
+            broker.calls,
+            [
+                ("EURUSD-OTC", "CALL", 10000, 60),
+                ("GBPUSD-OTC", "PUT", 10000, 60),
+            ],
         )
 
     async def test_ignores_aborted_record(self) -> None:

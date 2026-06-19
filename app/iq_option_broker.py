@@ -290,11 +290,20 @@ class IQOptionBroker(BrokerInterface):
     def _trade_asset_candidates(cls, asset: str) -> List[str]:
         primary = cls._normalize_asset_name(asset)
         candidates = [primary]
-        base = primary[:-4] if primary.upper().endswith("-OTC") else primary
-        if "/" not in base and len(base) == 6 and base.isalpha():
-            candidates.append(f"{base[:3]}/{base[3:]}-OTC")
-        if "/" in base:
-            candidates.append(f"{base.replace('/', '')}-OTC")
+        expanded = [primary]
+        if primary.upper().endswith("-OTC-OP"):
+            expanded.append(f"{primary[:-7]}-OTC")
+        elif primary.upper().endswith("-OP"):
+            expanded.append(primary[:-3])
+
+        for item in expanded:
+            if item not in candidates:
+                candidates.append(item)
+            base = item[:-4] if item.upper().endswith("-OTC") else item
+            if "/" not in base and len(base) == 6 and base.isalpha():
+                candidates.append(f"{base[:3]}/{base[3:]}-OTC")
+            if "/" in base:
+                candidates.append(f"{base.replace('/', '')}-OTC")
         unique: List[str] = []
         for candidate in candidates:
             if candidate not in unique:
