@@ -83,15 +83,16 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second, [])
         self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
 
-    async def test_ignores_waiting_entry_until_virtual_confirms_entry(self) -> None:
+    async def test_places_due_waiting_entry_record(self) -> None:
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
         record = make_record(status="waiting_entry")
 
         trades = await executor.execute_due("EURUSD-OTC", [record], broker)
 
-        self.assertEqual(trades, [])
-        self.assertEqual(broker.calls, [])
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0].status, "placed")
+        self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
 
     async def test_places_every_due_record_across_markets(self) -> None:
         broker = FakeBroker()
@@ -130,17 +131,17 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
         now = utc_now()
-        record = make_record(entry_at=now - timedelta(seconds=4), expires_at=now + timedelta(seconds=56))
+        record = make_record(entry_at=now - timedelta(seconds=9), expires_at=now + timedelta(seconds=51))
 
         trades = await executor.execute_due("EURUSD-OTC", [record], broker)
 
         self.assertEqual(trades, [])
         self.assertEqual(broker.calls, [])
 
-    async def test_uses_configured_entry_window_without_expanding_it(self) -> None:
+    async def test_entry_window_has_latency_floor(self) -> None:
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
 
-        self.assertEqual(executor.entry_window_seconds, 3)
+        self.assertEqual(executor.entry_window_seconds, 8)
 
     async def test_disabled_executor_does_not_trade(self) -> None:
         broker = FakeBroker()

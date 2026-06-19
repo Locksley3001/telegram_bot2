@@ -78,21 +78,6 @@ class PerformanceTracker:
             shadow.main_reason = f"{shadow.main_reason} | SOMBRA: {shadow.blocked_reason}"
         self.register_signal(shadow)
 
-    def abort_record(self, record_id: str, reason: str) -> Optional[SignalOutcome]:
-        record = self.records.get(record_id)
-        if record is None or record.status not in {"waiting_entry", "pending"}:
-            return None
-        record.status = "aborted"
-        record.resolved_at = utc_now()
-        record.abort_reason = reason.strip()
-        if record.entry_price <= 0:
-            record.entry_price = record.result_price or 0.0
-        record.result_price = record.entry_price
-        if record.abort_reason and record.abort_reason not in record.main_reason:
-            record.main_reason = f"{record.main_reason} | ABORTADA: {record.abort_reason}"
-        self._save()
-        return record
-
     def evaluate(
         self,
         asset: str,

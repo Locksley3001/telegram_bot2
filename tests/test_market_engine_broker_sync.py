@@ -5,7 +5,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from app.market_engine import MarketEngine
-from app.models import BrokerTrade, Signal, SignalOutcome, utc_now
+from app.models import BrokerTrade, Candle, Signal, SignalOutcome, utc_now
 
 
 class FakeTradeExecutor:
@@ -41,16 +41,34 @@ class PlacingTradeExecutor(FakeTradeExecutor):
 
 
 class FakePerformance:
-    def __init__(self, record: SignalOutcome) -> None:
+    def __init__(self, record: SignalOutcome, *, entry_status: str = "pending") -> None:
         self.records = {record.id: record}
-        self.aborted: list[tuple[str, str]] = []
+        self.entry_status = entry_status
+        self.evaluate_calls = 0
 
-    def abort_record(self, record_id: str, reason: str):
-        self.aborted.append((record_id, reason))
-        record = self.records[record_id]
-        record.status = "aborted"
-        record.abort_reason = reason
-        return record
+    def evaluate(self, asset, candles, abort_checker=None):
+        self.evaluate_calls += 1
+        record = next(iter(self.records.values()))
+        record.status = self.entry_status
+        if self.entry_status == "aborted":
+            record.abort_reason = "apertura abortada"
+        return [record] if self.entry_status == "aborted" else []
+
+
+class FakeBroker:
+    connected = True
+
+    async def get_realtime_candles(self, asset, timeframe):
+        now = utc_now().timestamp()
+        return [
+            Candle(timestamp=now - 180, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=True),
+            Candle(timestamp=now - 120, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=True),
+            Candle(timestamp=now - 60, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=True),
+            Candle(timestamp=now, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=False),
+        ]
+
+    async def get_candles(self, asset, timeframe, count):
+        return await self.get_realtime_candles(asset, timeframe)
 
 
 def make_signal(*, pending_delta_seconds: float = 5.0) -> Signal:
@@ -160,20 +178,37 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(engine.trade_executor.calls, [("EURUSD-OTC", [record.id])])
 
-    async def test_execute_signal_at_entry_aborts_when_broker_misses_window(self) -> None:
-        signal = make_signal(pending_delta_seconds=-2.0)
+    async def test_execute_signal_at_entry_waits_for_virtual_entry_confirmation(self) -> None:
+        signal = make_signal(pending_delta_seconds=-0.1)
         record = make_outcome(signal)
-        record.status = "pending"
+        record.status = "waiting_entry"
         engine = object.__new__(MarketEngine)
         engine.settings = SimpleNamespace(poll_interval_seconds=0.01)
-        engine.trade_executor = FakeTradeExecutor(enabled=True, entry_window_seconds=0.5)
-        engine.performance = FakePerformance(record)
-        engine.broker = object()
+        engine.trade_executor = PlacingTradeExecutor(enabled=True, entry_window_seconds=8.0)
+        engine.performance = FakePerformance(record, entry_status="pending")
+        engine.analyzer = SimpleNamespace(abort_pending_reason=lambda record, candles: None)
+        engine.broker = FakeBroker()
+
+        await engine._execute_signal_at_entry("EURUSD-OTC", record.id)
+
+        self.assertEqual(engine.performance.evaluate_calls, 1)
+        self.assertEqual(engine.trade_executor.calls, [("EURUSD-OTC", [record.id])])
+
+    async def test_execute_signal_at_entry_skips_broker_when_virtual_aborts(self) -> None:
+        signal = make_signal(pending_delta_seconds=-0.1)
+        record = make_outcome(signal)
+        record.status = "waiting_entry"
+        engine = object.__new__(MarketEngine)
+        engine.settings = SimpleNamespace(poll_interval_seconds=0.01)
+        engine.trade_executor = FakeTradeExecutor(enabled=True, entry_window_seconds=8.0)
+        engine.performance = FakePerformance(record, entry_status="aborted")
+        engine.analyzer = SimpleNamespace(abort_pending_reason=lambda record, candles: "apertura abortada")
+        engine.broker = FakeBroker()
 
         await engine._execute_signal_at_entry("EURUSD-OTC", record.id)
 
         self.assertEqual(record.status, "aborted")
-        self.assertIn("BROKER NO EJECUTO", record.abort_reason)
+        self.assertEqual(engine.trade_executor.calls, [])
 
 
 if __name__ == "__main__":

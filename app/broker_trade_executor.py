@@ -10,7 +10,7 @@ from app.models import BrokerTrade, BrokerTradingSummary, SignalOutcome, utc_now
 from app.state_storage import StateStorage
 
 LOGGER = logging.getLogger(__name__)
-MIN_ENTRY_WINDOW_SECONDS = 0.5
+MIN_ENTRY_WINDOW_SECONDS = 8.0
 
 
 class BrokerTradeExecutor:
@@ -86,7 +86,7 @@ class BrokerTradeExecutor:
             return False
         if record.asset != asset or record.is_shadow:
             return False
-        if record.status != "pending":
+        if record.status not in {"waiting_entry", "pending"}:
             return False
         if record.direction not in {"CALL", "PUT"} or record.stake_amount < self.min_stake:
             return False

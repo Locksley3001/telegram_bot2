@@ -386,7 +386,7 @@ class MarketEngine:
         if delay > 0:
             await asyncio.sleep(delay)
 
-        retry_interval = max(0.25, min(1.0, float(self.settings.poll_interval_seconds)))
+        retry_interval = max(0.05, min(0.25, float(self.settings.poll_interval_seconds)))
         while True:
             record = self.performance.records.get(signal_id)
             if record is None:
@@ -402,32 +402,31 @@ class MarketEngine:
                 entry_at + timedelta(seconds=self.trade_executor.entry_window_seconds),
             )
             if utc_now() > deadline:
-                existing_trade = self.trade_executor.trades.get(signal_id)
-                if existing_trade is None or existing_trade.status != "placed":
-                    reason = "BROKER NO EJECUTO dentro de la ventana de entrada"
-                    if existing_trade is not None and existing_trade.error:
-                        reason = f"{reason}: {existing_trade.error}"
-                    self.performance.abort_record(signal_id, reason)
                 return
+
+            if record.status == "waiting_entry":
+                try:
+                    candles = await self.broker.get_realtime_candles(record.asset or asset, record.timeframe)
+                    if len(candles) < 4:
+                        candles = await self.broker.get_candles(
+                            record.asset or asset,
+                            record.timeframe,
+                            self.settings.candle_count,
+                        )
+                    self.performance.evaluate(record.asset or asset, candles, self.analyzer.abort_pending_reason)
+                except Exception:
+                    LOGGER.exception("No se pudo confirmar apertura virtual para %s", signal_id)
+                record = self.performance.records.get(signal_id)
+                if record is None or record.status not in {"waiting_entry", "pending"}:
+                    return
+                if record.status == "waiting_entry":
+                    await asyncio.sleep(retry_interval)
+                    continue
 
             executed_trades = await self.trade_executor.execute_due(record.asset or asset, [record], self.broker)
             if any(trade.status == "placed" for trade in executed_trades):
                 LOGGER.info("Operacion enviada a IQ Option al abrir vela para %s", signal_id)
                 return
-            if record.status == "waiting_entry":
-                candles = await self.broker.get_realtime_candles(record.asset or asset, record.timeframe)
-                if len(candles) < 4:
-                    candles = await self.broker.get_candles(record.asset or asset, record.timeframe, self.settings.candle_count)
-                self.performance.evaluate(record.asset or asset, candles, self.analyzer.abort_pending_reason)
-                record = self.performance.records.get(signal_id)
-                if record is None or record.status != "pending":
-                    await asyncio.sleep(retry_interval)
-                    continue
-
-                executed_trades = await self.trade_executor.execute_due(record.asset or asset, [record], self.broker)
-                if any(trade.status == "placed" for trade in executed_trades):
-                    LOGGER.info("Operacion enviada a IQ Option al abrir vela para %s", signal_id)
-                    return
             await asyncio.sleep(retry_interval)
 
     async def _execute_due_broker_trades(self, markets: List[str]) -> None:
