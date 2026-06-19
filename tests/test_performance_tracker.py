@@ -204,6 +204,21 @@ class PerformanceTrackerTests(unittest.TestCase):
         self.assertEqual(resolved[0].result_price, 99)
         self.assertEqual(resolved[0].status, "loss")
 
+    def test_abort_record_removes_pending_trade_from_trainable_results(self) -> None:
+        tracker = PerformanceTracker(self.path)
+        record = make_outcome(1, status="pending")
+        record.result_price = None
+        record.resolved_at = None
+        tracker.records = {record.id: record}
+
+        aborted = tracker.abort_record(record.id, "BROKER NO EJECUTO")
+
+        self.assertIsNotNone(aborted)
+        self.assertEqual(record.status, "aborted")
+        self.assertEqual(record.result_price, record.entry_price)
+        self.assertIn("BROKER NO EJECUTO", record.abort_reason)
+        self.assertEqual(tracker.summary().resolved, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

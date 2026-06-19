@@ -391,6 +391,9 @@ class MarketEngine:
             record = self.performance.records.get(signal_id)
             if record is None:
                 return
+            existing_trade = self.trade_executor.trades.get(signal_id)
+            if existing_trade is not None and existing_trade.status == "placed":
+                return
             if record.status not in {"waiting_entry", "pending"}:
                 return
             entry_at = record.entry_at or utc_now()
@@ -399,6 +402,12 @@ class MarketEngine:
                 entry_at + timedelta(seconds=self.trade_executor.entry_window_seconds),
             )
             if utc_now() > deadline:
+                existing_trade = self.trade_executor.trades.get(signal_id)
+                if existing_trade is None or existing_trade.status != "placed":
+                    reason = "BROKER NO EJECUTO dentro de la ventana de entrada"
+                    if existing_trade is not None and existing_trade.error:
+                        reason = f"{reason}: {existing_trade.error}"
+                    self.performance.abort_record(signal_id, reason)
                 return
 
             executed_trades = await self.trade_executor.execute_due(record.asset or asset, [record], self.broker)

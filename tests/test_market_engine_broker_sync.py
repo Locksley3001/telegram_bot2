@@ -13,6 +13,7 @@ class FakeTradeExecutor:
         self.enabled = enabled
         self.entry_window_seconds = entry_window_seconds
         self.calls: list[tuple[str, int]] = []
+        self.trades = {}
 
     async def execute_due(self, asset, records, broker):
         records = list(records)
@@ -24,19 +25,32 @@ class PlacingTradeExecutor(FakeTradeExecutor):
     async def execute_due(self, asset, records, broker):
         records = list(records)
         self.calls.append((asset, [record.id for record in records]))
-        return [
-            BrokerTrade(
-                signal_id=records[0].id,
-                status="placed",
-                asset=records[0].asset,
-                direction=records[0].direction,
-                stake_amount=records[0].stake_amount,
-                expiration_seconds=records[0].suggested_expiration,
-                balance_mode="PRACTICE",
-                requested_at=utc_now(),
-                placed_at=utc_now(),
-            )
-        ]
+        trade = BrokerTrade(
+            signal_id=records[0].id,
+            status="placed",
+            asset=records[0].asset,
+            direction=records[0].direction,
+            stake_amount=records[0].stake_amount,
+            expiration_seconds=records[0].suggested_expiration,
+            balance_mode="PRACTICE",
+            requested_at=utc_now(),
+            placed_at=utc_now(),
+        )
+        self.trades[trade.signal_id] = trade
+        return [trade]
+
+
+class FakePerformance:
+    def __init__(self, record: SignalOutcome) -> None:
+        self.records = {record.id: record}
+        self.aborted: list[tuple[str, str]] = []
+
+    def abort_record(self, record_id: str, reason: str):
+        self.aborted.append((record_id, reason))
+        record = self.records[record_id]
+        record.status = "aborted"
+        record.abort_reason = reason
+        return record
 
 
 def make_signal(*, pending_delta_seconds: float = 5.0) -> Signal:
@@ -145,6 +159,21 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         await engine._execute_signal_at_entry("EURUSD-OTC", record.id)
 
         self.assertEqual(engine.trade_executor.calls, [("EURUSD-OTC", [record.id])])
+
+    async def test_execute_signal_at_entry_aborts_when_broker_misses_window(self) -> None:
+        signal = make_signal(pending_delta_seconds=-2.0)
+        record = make_outcome(signal)
+        record.status = "pending"
+        engine = object.__new__(MarketEngine)
+        engine.settings = SimpleNamespace(poll_interval_seconds=0.01)
+        engine.trade_executor = FakeTradeExecutor(enabled=True, entry_window_seconds=0.5)
+        engine.performance = FakePerformance(record)
+        engine.broker = object()
+
+        await engine._execute_signal_at_entry("EURUSD-OTC", record.id)
+
+        self.assertEqual(record.status, "aborted")
+        self.assertIn("BROKER NO EJECUTO", record.abort_reason)
 
 
 if __name__ == "__main__":

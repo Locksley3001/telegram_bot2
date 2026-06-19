@@ -10,7 +10,7 @@ from app.models import BrokerTrade, BrokerTradingSummary, SignalOutcome, utc_now
 from app.state_storage import StateStorage
 
 LOGGER = logging.getLogger(__name__)
-MIN_ENTRY_WINDOW_SECONDS = 12.0
+MIN_ENTRY_WINDOW_SECONDS = 0.5
 
 
 class BrokerTradeExecutor:

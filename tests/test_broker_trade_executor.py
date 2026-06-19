@@ -130,12 +130,17 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
         now = utc_now()
-        record = make_record(entry_at=now - timedelta(seconds=20), expires_at=now + timedelta(seconds=40))
+        record = make_record(entry_at=now - timedelta(seconds=4), expires_at=now + timedelta(seconds=56))
 
         trades = await executor.execute_due("EURUSD-OTC", [record], broker)
 
         self.assertEqual(trades, [])
         self.assertEqual(broker.calls, [])
+
+    async def test_uses_configured_entry_window_without_expanding_it(self) -> None:
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
+
+        self.assertEqual(executor.entry_window_seconds, 3)
 
     async def test_disabled_executor_does_not_trade(self) -> None:
         broker = FakeBroker()
