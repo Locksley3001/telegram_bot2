@@ -5,7 +5,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from app.market_engine import MarketEngine
-from app.models import Signal, utc_now
+from app.models import BrokerTrade, Signal, SignalOutcome, utc_now
 
 
 class FakeTradeExecutor:
@@ -18,6 +18,25 @@ class FakeTradeExecutor:
         records = list(records)
         self.calls.append((asset, len(records)))
         return []
+
+
+class PlacingTradeExecutor(FakeTradeExecutor):
+    async def execute_due(self, asset, records, broker):
+        records = list(records)
+        self.calls.append((asset, [record.id for record in records]))
+        return [
+            BrokerTrade(
+                signal_id=records[0].id,
+                status="placed",
+                asset=records[0].asset,
+                direction=records[0].direction,
+                stake_amount=records[0].stake_amount,
+                expiration_seconds=records[0].suggested_expiration,
+                balance_mode="PRACTICE",
+                requested_at=utc_now(),
+                placed_at=utc_now(),
+            )
+        ]
 
 
 def make_signal(*, pending_delta_seconds: float = 5.0) -> Signal:
@@ -41,6 +60,30 @@ def make_signal(*, pending_delta_seconds: float = 5.0) -> Signal:
         confidence="low",
         stake_amount=10000,
         pending_execution_at=now + timedelta(seconds=pending_delta_seconds),
+    )
+
+
+def make_outcome(signal: Signal) -> SignalOutcome:
+    entry_at = signal.pending_execution_at or signal.created_at
+    return SignalOutcome(
+        id=signal.id,
+        asset=signal.asset,
+        direction=signal.direction,
+        score=signal.score,
+        strength=signal.strength,
+        continuity=signal.continuity,
+        exhaustion=signal.exhaustion,
+        cci=signal.cci,
+        entry_price=0.0,
+        entry_at=entry_at,
+        stake_amount=signal.stake_amount,
+        payout_rate=0.85,
+        status="pending",
+        timeframe=signal.timeframe,
+        suggested_expiration=signal.suggested_expiration,
+        created_at=signal.created_at,
+        expires_at=entry_at + timedelta(seconds=signal.suggested_expiration),
+        main_reason=signal.main_reason,
     )
 
 
@@ -89,6 +132,19 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         signal = make_signal(pending_delta_seconds=-20.0)
 
         self.assertTrue(engine._can_emit(signal))
+
+    async def test_execute_signal_at_entry_uses_same_history_record(self) -> None:
+        signal = make_signal(pending_delta_seconds=-0.1)
+        record = make_outcome(signal)
+        engine = object.__new__(MarketEngine)
+        engine.settings = SimpleNamespace(poll_interval_seconds=0.01)
+        engine.trade_executor = PlacingTradeExecutor(enabled=True, entry_window_seconds=12.0)
+        engine.performance = SimpleNamespace(records={record.id: record})
+        engine.broker = object()
+
+        await engine._execute_signal_at_entry("EURUSD-OTC", record.id)
+
+        self.assertEqual(engine.trade_executor.calls, [("EURUSD-OTC", [record.id])])
 
 
 if __name__ == "__main__":

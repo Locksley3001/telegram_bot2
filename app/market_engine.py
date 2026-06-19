@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -115,6 +115,7 @@ class MarketEngine:
         self._last_learning_event: Dict[str, str] = {}
         self._shadow_registered_ids: Set[str] = set()
         self._emitted_signal_ids: Set[str] = {signal.id for signal in self.signals}
+        self._broker_entry_tasks: Dict[str, asyncio.Task] = {}
         self._restore_signal_cooldowns()
         self._task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
@@ -134,6 +135,11 @@ class MarketEngine:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        for task in list(self._broker_entry_tasks.values()):
+            task.cancel()
+        if self._broker_entry_tasks:
+            await asyncio.gather(*self._broker_entry_tasks.values(), return_exceptions=True)
+            self._broker_entry_tasks.clear()
         await self.broker.disconnect()
 
     async def subscribe(self, websocket: WebSocket) -> None:
@@ -328,6 +334,7 @@ class MarketEngine:
                         self._emitted_signal_ids = {item.id for item in self.signals[-self._signal_history_limit :]}
                     emit_signal = signal
             if emit_signal is not None:
+                self._schedule_broker_entry_trade(asset, emit_signal.id)
                 await self._execute_fresh_signal(asset, emit_signal.id, candles)
                 await self.notifier.send_signal(emit_signal)
         except Exception as exc:
@@ -345,6 +352,60 @@ class MarketEngine:
         executed_trades = await self.trade_executor.execute_due(asset, [record], self.broker)
         if executed_trades:
             LOGGER.info("Operacion enviada a IQ Option para senal nueva %s", signal_id)
+
+    def _schedule_broker_entry_trade(self, asset: str, signal_id: str) -> None:
+        if not self.trade_executor.enabled:
+            return
+        existing = self._broker_entry_tasks.get(signal_id)
+        if existing is not None and not existing.done():
+            return
+        task = asyncio.create_task(
+            self._execute_signal_at_entry(asset, signal_id),
+            name=f"broker-entry-{signal_id}",
+        )
+        self._broker_entry_tasks[signal_id] = task
+        task.add_done_callback(lambda done_task, key=signal_id: self._finalize_broker_entry_task(key, done_task))
+
+    def _finalize_broker_entry_task(self, signal_id: str, task: asyncio.Task) -> None:
+        self._broker_entry_tasks.pop(signal_id, None)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            LOGGER.error(
+                "Fallo la tarea de entrada broker para %s",
+                signal_id,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
+
+    async def _execute_signal_at_entry(self, asset: str, signal_id: str) -> None:
+        record = self.performance.records.get(signal_id)
+        if record is None or record.entry_at is None:
+            return
+        delay = (record.entry_at - utc_now()).total_seconds()
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        retry_interval = max(0.25, min(1.0, float(self.settings.poll_interval_seconds)))
+        while True:
+            record = self.performance.records.get(signal_id)
+            if record is None:
+                return
+            if record.status not in {"waiting_entry", "pending"}:
+                return
+            entry_at = record.entry_at or utc_now()
+            deadline = min(
+                record.expires_at,
+                entry_at + timedelta(seconds=self.trade_executor.entry_window_seconds),
+            )
+            if utc_now() > deadline:
+                return
+
+            executed_trades = await self.trade_executor.execute_due(record.asset or asset, [record], self.broker)
+            if any(trade.status == "placed" for trade in executed_trades):
+                LOGGER.info("Operacion enviada a IQ Option al abrir vela para %s", signal_id)
+                return
+            await asyncio.sleep(retry_interval)
 
     async def _execute_due_broker_trades(self, markets: List[str]) -> None:
         if not self.trade_executor.enabled:

@@ -19,6 +19,16 @@ class FakeBroker:
         return True, f"order-{len(self.calls)}"
 
 
+class FlakyBroker(FakeBroker):
+    def __init__(self, responses: list[tuple[bool, str]]) -> None:
+        super().__init__()
+        self.responses = responses
+
+    async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
+        self.calls.append((asset, direction, amount, expiration_seconds))
+        return self.responses.pop(0)
+
+
 def make_record(**overrides: object) -> SignalOutcome:
     now = utc_now()
     payload = {
@@ -84,6 +94,29 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trades[0].status, "placed")
         self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
 
+    async def test_places_every_due_record_across_markets(self) -> None:
+        broker = FakeBroker()
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
+        assets = ["EURUSD-OTC", "GBPUSD-OTC", "USDJPY-OTC", "BTCUSD-OTC"]
+        records = [
+            make_record(
+                id=f"{asset}:60:CALL:test",
+                asset=asset,
+                direction="CALL",
+            )
+            for asset in assets
+        ]
+
+        trades = []
+        for asset in assets:
+            trades.extend(await executor.execute_due(asset, records, broker))
+
+        self.assertEqual(len(trades), len(assets))
+        self.assertEqual(
+            broker.calls,
+            [(asset, "CALL", 10000, 60) for asset in assets],
+        )
+
     async def test_ignores_aborted_record(self) -> None:
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
@@ -136,6 +169,22 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trades, [])
         self.assertEqual(executor.trades, {})
         self.assertEqual(broker.calls, [])
+
+    async def test_retries_failed_record_while_still_due(self) -> None:
+        broker = FlakyBroker([
+            (False, "Cannot purchase an option (the asset is not available at the moment)."),
+            (True, "order-2"),
+        ])
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE")
+        record = make_record()
+
+        first = await executor.execute_due("EURUSD-OTC", [record], broker)
+        second = await executor.execute_due("EURUSD-OTC", [record], broker)
+
+        self.assertEqual(first[0].status, "failed")
+        self.assertEqual(second[0].status, "placed")
+        self.assertEqual(second[0].broker_order_id, "order-2")
+        self.assertEqual(len(broker.calls), 2)
 
     async def test_set_enabled_persists_runtime_state(self) -> None:
         executor = BrokerTradeExecutor(self.path, enabled=False, balance_mode="PRACTICE")

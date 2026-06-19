@@ -81,7 +81,8 @@ class BrokerTradeExecutor:
         )
 
     def _is_due(self, asset: str, record: SignalOutcome) -> bool:
-        if record.id in self.trades:
+        existing = self.trades.get(record.id)
+        if existing is not None and existing.status == "placed":
             return False
         if record.asset != asset or record.is_shadow:
             return False
