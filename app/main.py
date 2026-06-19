@@ -78,7 +78,7 @@ async def health() -> dict:
         "data_dir": str(engine._data_dir),
         "signal_history_limit": engine._signal_history_limit,
         "api_signal_limit": settings.api_signal_limit,
-        "version": "iq-option-real-trading-2026-06-08",
+        "version": "iq-option-broker-watchdog-2026-06-19",
     }
 
 

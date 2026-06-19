@@ -238,6 +238,6 @@ class BrokerTradeExecutor:
             ]
         }
         if self.storage is not None:
-            self.storage.save_json(self.path.name, self.path, payload)
+            self.storage.save_json(self.path.name, self.path, payload, force_remote=True)
         else:
             StateStorage._write_local(self.path, payload)

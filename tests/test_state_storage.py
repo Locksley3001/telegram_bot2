@@ -91,6 +91,17 @@ class StateStorageTests(unittest.TestCase):
         self.assertEqual(len(posts), 2)
         self.assertEqual(storage.pending_remote_writes, set())
 
+    def test_force_remote_save_bypasses_throttle(self) -> None:
+        storage = RecordingStorage(self.data_dir, remote_save_interval_seconds=60)
+        path = self.data_dir / "broker_trades.json"
+
+        storage.save_json("broker_trades.json", path, {"trades": [1]})
+        storage.save_json("broker_trades.json", path, {"trades": [1, 2]}, force_remote=True)
+
+        posts = [request for request in storage.requests if request[0] == "POST"]
+        self.assertEqual(len(posts), 2)
+        self.assertEqual(storage.pending_remote_writes, set())
+
     def test_version_table_is_opt_in(self) -> None:
         storage = RecordingStorage(self.data_dir, versioning_enabled=True)
         path = self.data_dir / "state.json"

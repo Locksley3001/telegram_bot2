@@ -66,7 +66,7 @@ class StateStorage:
             self.save_json(name, path, local)
         return local
 
-    def save_json(self, name: str, path: Path, payload: dict[str, Any]) -> None:
+    def save_json(self, name: str, path: Path, payload: dict[str, Any], *, force_remote: bool = False) -> None:
         self._write_local(path, payload)
         if not self.enabled:
             return
@@ -77,7 +77,7 @@ class StateStorage:
             self._pending_payloads.pop(name, None)
             return
         now = datetime.now(timezone.utc)
-        if not self._remote_save_due(name, now):
+        if not force_remote and not self._remote_save_due(name, now):
             self.skipped_remote_saves += 1
             self.pending_remote_writes.add(name)
             self._pending_payloads[name] = (copy.deepcopy(payload), payload_hash)
