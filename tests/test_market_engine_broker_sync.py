@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+from app.config import Settings
 from app.broker_trade_executor import BrokerTradeExecutor
 from app.market_engine import MarketEngine
 from app.models import BrokerTrade, Candle, Signal, SignalOutcome, utc_now
@@ -141,6 +142,32 @@ def make_outcome(signal: Signal) -> SignalOutcome:
 
 
 class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
+    def test_settings_remove_disabled_markets_from_market_list(self) -> None:
+        settings = Settings(
+            MARKETS="EURUSD-OTC,USDJPY-OTC,GBPUSD-OTC",
+            DISABLED_MARKETS="USDJPY-OTC",
+            SUPABASE_STATE_ENABLED=False,
+        )
+
+        self.assertEqual(settings.market_list, ["EURUSD-OTC", "GBPUSD-OTC"])
+        self.assertEqual(settings.disabled_market_list, ["USDJPY-OTC"])
+
+    async def test_disabled_market_cannot_be_enabled_runtime(self) -> None:
+        engine = object.__new__(MarketEngine)
+        engine.disabled_markets = {"USDJPY-OTC"}
+        engine.known_markets = {"EURUSD-OTC"}
+        engine.active_markets = {"EURUSD-OTC"}
+        engine.snapshots = {"USDJPY-OTC": object()}
+        engine._clients = set()
+        engine._lock = asyncio.Lock()
+        engine.state = lambda: SimpleNamespace(active_markets=sorted(engine.active_markets))
+
+        state = await engine.set_market_enabled("USDJPY-OTC", True)
+
+        self.assertEqual(state.active_markets, ["EURUSD-OTC"])
+        self.assertNotIn("USDJPY-OTC", engine.known_markets)
+        self.assertNotIn("USDJPY-OTC", engine.snapshots)
+
     async def test_execute_due_broker_trades_sweeps_only_active_market_records(self) -> None:
         engine = object.__new__(MarketEngine)
         engine.trade_executor = FakeTradeExecutor(enabled=True)

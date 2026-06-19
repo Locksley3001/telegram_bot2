@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import ClassVar, List
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -9,6 +9,8 @@ load_dotenv(encoding="utf-8-sig")
 
 
 class Settings(BaseSettings):
+    DEFAULT_MARKETS: ClassVar[str] = "EURUSD-OTC,GBPUSD-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC"
+
     iq_option_email: str = Field(default="", alias="IQ_OPTION_EMAIL")
     iq_option_password: str = Field(default="", alias="IQ_OPTION_PASSWORD")
     # CONFIGURACION_MANUAL_REQUERIDA: solo completar si IQ Option pide 2FA/SMS.
@@ -17,9 +19,10 @@ class Settings(BaseSettings):
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str = Field(default="", alias="TELEGRAM_CHAT_ID")
     markets: str = Field(
-        default="EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC",
+        default=DEFAULT_MARKETS,
         alias="MARKETS",
     )
+    disabled_markets: str = Field(default="USDJPY-OTC", alias="DISABLED_MARKETS")
     default_timeframe: int = Field(default=60, alias="DEFAULT_TIMEFRAME")
     poll_interval_seconds: float = Field(default=0.75, alias="POLL_INTERVAL_SECONDS")
     candle_count: int = Field(default=80, alias="CANDLE_COUNT")
@@ -68,7 +71,16 @@ class Settings(BaseSettings):
             return ",".join(str(market).strip() for market in value if str(market).strip())
         if isinstance(value, str):
             return value
-        return "EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,BTCUSD-OTC,ETHUSD-OTC,NVDA/AMD-OTC,SOLUSD-OTC"
+        return cls.DEFAULT_MARKETS
+
+    @field_validator("disabled_markets", mode="before")
+    @classmethod
+    def parse_disabled_markets(cls, value: object) -> str:
+        if isinstance(value, list):
+            return ",".join(str(market).strip() for market in value if str(market).strip())
+        if isinstance(value, str):
+            return value
+        return "USDJPY-OTC"
 
     @field_validator("default_timeframe")
     @classmethod
@@ -78,7 +90,20 @@ class Settings(BaseSettings):
 
     @property
     def market_list(self) -> List[str]:
-        return [market.strip() for market in self.markets.split(",") if market.strip()]
+        disabled = {self._normalize_market_label(market) for market in self.disabled_markets.split(",") if market.strip()}
+        return [
+            market.strip()
+            for market in self.markets.split(",")
+            if market.strip() and self._normalize_market_label(market) not in disabled
+        ]
+
+    @property
+    def disabled_market_list(self) -> List[str]:
+        return [
+            self._normalize_market_label(market)
+            for market in self.disabled_markets.split(",")
+            if market.strip()
+        ]
 
     @property
     def supabase_key(self) -> str:
@@ -88,6 +113,22 @@ class Settings(BaseSettings):
             or self.supabase_generic_key
             or self.supabase_anon_key
         )
+
+    @staticmethod
+    def _normalize_market_label(asset: str) -> str:
+        cleaned = asset.strip().upper().replace(" ", "").replace("_", "-")
+        if not cleaned:
+            return ""
+        if not cleaned.endswith("-OTC"):
+            cleaned = f"{cleaned}-OTC"
+        aliases = {
+            "NVIDIAAMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA/AMD-OTC": "NVDA/AMD-OTC",
+            "NVIDIA-AMD-OTC": "NVDA/AMD-OTC",
+            "NVDAAMD-OTC": "NVDA/AMD-OTC",
+            "NVDA/AMD-OTC": "NVDA/AMD-OTC",
+        }
+        return aliases.get(cleaned, cleaned)
 
 
 @lru_cache

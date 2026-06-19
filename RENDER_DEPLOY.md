@@ -50,7 +50,8 @@ PYTHON_VERSION -> 3.12.8, solo si Render no detecta el archivo .python-version.
 Variables opcionales:
 
 ```text
-MARKETS -> Lista separada por comas. Ejemplo: EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC.
+MARKETS -> Lista separada por comas. Ejemplo: EURUSD-OTC,GBPUSD-OTC,BTCUSD-OTC.
+DISABLED_MARKETS -> Mercados que el motor no debe analizar aunque aparezcan en MARKETS. Por defecto: USDJPY-OTC.
 DEFAULT_TIMEFRAME -> 30, 45, 60, 120, 180 o 300. Por defecto: 60.
 POLL_INTERVAL_SECONDS -> Frecuencia de consulta al broker. Por defecto: 2.0.
 CANDLE_COUNT -> Cantidad de velas analizadas por activo. Por defecto: 80.

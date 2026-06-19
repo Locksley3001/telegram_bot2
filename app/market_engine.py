@@ -90,7 +90,13 @@ class MarketEngine:
         )
         if settings.learning_update_enabled:
             self.learning.rebuild(self.performance.records.values())
+        self.disabled_markets: Set[str] = {
+            self._normalize_market_label(market)
+            for market in getattr(settings, "disabled_market_list", [])
+            if self._normalize_market_label(market)
+        }
         configured_markets = {self._normalize_market_label(market) for market in settings.market_list}
+        configured_markets.difference_update(self.disabled_markets)
         configured_markets.discard("")
         self.active_markets: Set[str] = set(configured_markets)
         self.known_markets: Set[str] = set(configured_markets)
@@ -153,7 +159,7 @@ class MarketEngine:
 
     async def add_market(self, asset: str) -> EngineState:
         cleaned = self._normalize_market_label(asset)
-        if cleaned:
+        if cleaned and cleaned not in self.disabled_markets:
             async with self._lock:
                 self.known_markets.add(cleaned)
                 self.active_markets.add(cleaned)
@@ -171,6 +177,13 @@ class MarketEngine:
 
     async def set_market_enabled(self, asset: str, enabled: bool) -> EngineState:
         cleaned = self._normalize_market_label(asset)
+        if cleaned in self.disabled_markets:
+            async with self._lock:
+                self.known_markets.discard(cleaned)
+                self.active_markets.discard(cleaned)
+                self.snapshots.pop(cleaned, None)
+            await self._broadcast()
+            return self.state()
         async with self._lock:
             self.known_markets.add(cleaned)
             if enabled:
