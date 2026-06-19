@@ -122,6 +122,7 @@ class MarketEngine:
         self._shadow_registered_ids: Set[str] = set()
         self._emitted_signal_ids: Set[str] = {signal.id for signal in self.signals}
         self._broker_entry_tasks: Dict[str, asyncio.Task] = {}
+        self._broker_watchdog_task: Optional[asyncio.Task] = None
         self._restore_signal_cooldowns()
         self._task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
@@ -133,6 +134,10 @@ class MarketEngine:
             self._stop.clear()
             self._restore_broker_entry_tasks()
             self._task = asyncio.create_task(self._run(), name="market-engine")
+            self._broker_watchdog_task = asyncio.create_task(
+                self._broker_execution_watchdog(),
+                name="broker-execution-watchdog",
+            )
 
     async def stop(self) -> None:
         self._stop.set()
@@ -142,6 +147,13 @@ class MarketEngine:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self._broker_watchdog_task is not None:
+            self._broker_watchdog_task.cancel()
+            try:
+                await self._broker_watchdog_task
+            except asyncio.CancelledError:
+                pass
+            self._broker_watchdog_task = None
         for task in list(self._broker_entry_tasks.values()):
             task.cancel()
         if self._broker_entry_tasks:
@@ -470,6 +482,51 @@ class MarketEngine:
         executed_trades = await self.trade_executor.execute_all_due(records, self.broker)
         if executed_trades:
             LOGGER.info("Sincronizadas %s operacion(es) pendientes con IQ Option", len(executed_trades))
+
+    async def _broker_execution_watchdog(self) -> None:
+        while not self._stop.is_set():
+            try:
+                if self.trade_executor.enabled and self.broker.connected:
+                    await self._confirm_waiting_broker_entries()
+                    await self._execute_due_broker_trades(sorted(self.active_markets))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception("Fallo el watchdog de ejecucion broker")
+            await asyncio.sleep(0.2)
+
+    async def _confirm_waiting_broker_entries(self) -> None:
+        now = utc_now()
+        records = [
+            record
+            for record in self.performance.records.values()
+            if not record.is_shadow
+            and record.status == "waiting_entry"
+            and record.entry_at is not None
+            and record.asset in self.active_markets
+        ]
+        for record in sorted(records, key=lambda item: item.entry_at or item.created_at):
+            entry_at = record.entry_at or now
+            deadline = min(
+                record.expires_at,
+                entry_at + timedelta(seconds=self.trade_executor.entry_window_seconds),
+            )
+            if now < entry_at or now > deadline:
+                continue
+            existing_trade = self.trade_executor.trades.get(record.id)
+            if existing_trade is not None and existing_trade.status == "placed":
+                continue
+            try:
+                candles = await self.broker.get_realtime_candles(record.asset, record.timeframe)
+                if len(candles) < 4:
+                    candles = await self.broker.get_candles(
+                        record.asset,
+                        record.timeframe,
+                        self.settings.candle_count,
+                    )
+                self.performance.evaluate(record.asset, candles, self.analyzer.abort_pending_reason)
+            except Exception:
+                LOGGER.exception("No se pudo confirmar entrada virtual para watchdog broker %s", record.id)
 
     def _remember_learning_event(self, asset: str, context: dict) -> None:
         event = str(context.get("learning_event") or "").strip()

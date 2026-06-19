@@ -93,6 +93,20 @@ class RecordingTradeBroker:
         return True, f"order-{len(self.calls)}"
 
 
+class CandleRecordingTradeBroker(RecordingTradeBroker):
+    async def get_realtime_candles(self, asset, timeframe):
+        now = utc_now().timestamp()
+        return [
+            Candle(timestamp=now - 180, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=True),
+            Candle(timestamp=now - 120, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=True),
+            Candle(timestamp=now - 60, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=True),
+            Candle(timestamp=now, open=1.0, high=1.1, low=0.9, close=1.0, is_closed=False),
+        ]
+
+    async def get_candles(self, asset, timeframe, count):
+        return await self.get_realtime_candles(asset, timeframe)
+
+
 def make_signal(*, pending_delta_seconds: float = 5.0) -> Signal:
     now = utc_now()
     return Signal(
@@ -355,6 +369,32 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(engine.performance.evaluate_calls, 1)
         self.assertEqual(engine.trade_executor.calls, [("EURUSD-OTC", [record.id])])
 
+    async def test_broker_watchdog_confirms_and_places_waiting_entry(self) -> None:
+        signal = make_signal(pending_delta_seconds=-0.1)
+        record = make_outcome(signal)
+        record.status = "waiting_entry"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            engine = object.__new__(MarketEngine)
+            engine.settings = SimpleNamespace(candle_count=80)
+            engine.trade_executor = BrokerTradeExecutor(
+                Path(temp_dir) / "broker_trades.json",
+                enabled=True,
+                balance_mode="PRACTICE",
+                entry_window_seconds=8.0,
+                min_stake=10000,
+            )
+            engine.performance = FakePerformance(record, entry_status="pending")
+            engine.analyzer = SimpleNamespace(abort_pending_reason=lambda record, candles: None)
+            engine.broker = CandleRecordingTradeBroker()
+            engine.active_markets = {record.asset}
+
+            await engine._confirm_waiting_broker_entries()
+            await engine._execute_due_broker_trades([record.asset])
+
+            self.assertEqual(record.status, "pending")
+            self.assertEqual(engine.broker.calls, [(record.asset, record.direction, record.stake_amount, record.suggested_expiration)])
+            self.assertIn(record.id, engine.trade_executor.trades)
+
     async def test_execute_signal_at_entry_skips_broker_when_virtual_aborts(self) -> None:
         signal = make_signal(pending_delta_seconds=-0.1)
         record = make_outcome(signal)
@@ -370,6 +410,32 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(record.status, "aborted")
         self.assertEqual(engine.trade_executor.calls, [])
+
+    async def test_broker_watchdog_does_not_place_aborted_entry(self) -> None:
+        signal = make_signal(pending_delta_seconds=-0.1)
+        record = make_outcome(signal)
+        record.status = "waiting_entry"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            engine = object.__new__(MarketEngine)
+            engine.settings = SimpleNamespace(candle_count=80)
+            engine.trade_executor = BrokerTradeExecutor(
+                Path(temp_dir) / "broker_trades.json",
+                enabled=True,
+                balance_mode="PRACTICE",
+                entry_window_seconds=8.0,
+                min_stake=10000,
+            )
+            engine.performance = FakePerformance(record, entry_status="aborted")
+            engine.analyzer = SimpleNamespace(abort_pending_reason=lambda record, candles: "apertura abortada")
+            engine.broker = CandleRecordingTradeBroker()
+            engine.active_markets = {record.asset}
+
+            await engine._confirm_waiting_broker_entries()
+            await engine._execute_due_broker_trades([record.asset])
+
+            self.assertEqual(record.status, "aborted")
+            self.assertEqual(engine.broker.calls, [])
+            self.assertEqual(engine.trade_executor.trades, {})
 
 
 if __name__ == "__main__":
