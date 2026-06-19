@@ -125,6 +125,7 @@ class MarketEngine:
     async def start(self) -> None:
         if self._task is None or self._task.done():
             self._stop.clear()
+            self._restore_broker_entry_tasks()
             self._task = asyncio.create_task(self._run(), name="market-engine")
 
     async def stop(self) -> None:
@@ -211,6 +212,7 @@ class MarketEngine:
         if enabled:
             await self._ensure_connection()
             await self.trade_executor.set_enabled(self.broker.connected)
+            self._restore_broker_entry_tasks()
         else:
             await self.trade_executor.set_enabled(False)
         await self._broadcast()
@@ -222,7 +224,6 @@ class MarketEngine:
                 await self._ensure_connection()
                 markets = sorted(self.active_markets)
                 if self.broker.connected and markets:
-                    await self._execute_due_broker_trades(markets)
                     await asyncio.gather(*(self._analyze_market(asset) for asset in markets))
                     self.broker_status = "conectado a IQ Option"
                 await self._broadcast()
@@ -261,9 +262,6 @@ class MarketEngine:
             if len(candles) < 4:
                 candles = await self.broker.get_candles(asset, self.timeframe, self.settings.candle_count)
             resolved_records = self.performance.evaluate(asset, candles, self.analyzer.abort_pending_reason)
-            executed_trades = await self.trade_executor.execute_due(asset, self.performance.records.values(), self.broker)
-            if executed_trades:
-                LOGGER.info("Operaciones enviadas a IQ Option para %s: %s", asset, [trade.signal_id for trade in executed_trades])
             if resolved_records:
                 self.learning.rebuild(self.performance.records.values())
             pending_outcomes = self.notifier.pending_outcomes(self.performance.records.values())
@@ -366,6 +364,23 @@ class MarketEngine:
         self._broker_entry_tasks[signal_id] = task
         task.add_done_callback(lambda done_task, key=signal_id: self._finalize_broker_entry_task(key, done_task))
 
+    def _restore_broker_entry_tasks(self) -> None:
+        if not self.trade_executor.enabled:
+            return
+        now = utc_now()
+        for record in self.performance.records.values():
+            if record.is_shadow or record.status not in {"waiting_entry", "pending"}:
+                continue
+            if record.entry_at is None or record.expires_at <= now:
+                continue
+            existing_trade = self.trade_executor.trades.get(record.id)
+            if existing_trade is not None and existing_trade.status == "placed":
+                continue
+            entry_delay = (now - record.entry_at).total_seconds()
+            if entry_delay > self.trade_executor.entry_window_seconds:
+                continue
+            self._schedule_broker_entry_trade(record.asset, record.id)
+
     def _finalize_broker_entry_task(self, signal_id: str, task: asyncio.Task) -> None:
         self._broker_entry_tasks.pop(signal_id, None)
         if task.cancelled():
@@ -430,20 +445,7 @@ class MarketEngine:
             await asyncio.sleep(retry_interval)
 
     async def _execute_due_broker_trades(self, markets: List[str]) -> None:
-        if not self.trade_executor.enabled:
-            return
-        market_set = set(markets)
-        records = [
-            record
-            for record in self.performance.records.values()
-            if record.asset in market_set
-        ]
-        executed_trades = await self.trade_executor.execute_all_due(records, self.broker)
-        if executed_trades:
-            LOGGER.info(
-                "Operaciones pendientes enviadas a IQ Option: %s",
-                [trade.signal_id for trade in executed_trades],
-            )
+        return
 
     def _remember_learning_event(self, asset: str, context: dict) -> None:
         event = str(context.get("learning_event") or "").strip()

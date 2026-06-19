@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import tempfile
 import unittest
 from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
+from app.broker_trade_executor import BrokerTradeExecutor
 from app.market_engine import MarketEngine
 from app.models import BrokerTrade, Candle, Signal, SignalOutcome, utc_now
 
@@ -77,6 +81,17 @@ class FakeBroker:
         return await self.get_realtime_candles(asset, timeframe)
 
 
+class RecordingTradeBroker:
+    connected = True
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, int, int]] = []
+
+    async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
+        self.calls.append((asset, direction, amount, expiration_seconds))
+        return True, f"order-{len(self.calls)}"
+
+
 def make_signal(*, pending_delta_seconds: float = 5.0) -> Signal:
     now = utc_now()
     return Signal(
@@ -126,7 +141,7 @@ def make_outcome(signal: Signal) -> SignalOutcome:
 
 
 class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
-    async def test_execute_due_broker_trades_sends_all_active_markets_as_one_batch(self) -> None:
+    async def test_execute_due_broker_trades_does_not_sweep_history_records(self) -> None:
         engine = object.__new__(MarketEngine)
         engine.trade_executor = FakeTradeExecutor(enabled=True)
         engine.performance = SimpleNamespace(
@@ -141,7 +156,7 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         await engine._execute_due_broker_trades(["EURUSD-OTC", "GBPUSD-OTC"])
 
         self.assertEqual(engine.trade_executor.calls, [])
-        self.assertEqual(engine.trade_executor.all_due_calls, [["one", "two"]])
+        self.assertEqual(engine.trade_executor.all_due_calls, [])
 
     async def test_execute_due_broker_trades_skips_when_disabled(self) -> None:
         engine = object.__new__(MarketEngine)
@@ -152,6 +167,65 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         await engine._execute_due_broker_trades(["EURUSD-OTC"])
 
         self.assertEqual(engine.trade_executor.calls, [])
+
+    def test_restore_broker_entry_tasks_schedules_only_live_unplaced_records(self) -> None:
+        now = utc_now()
+        live_signal = make_signal(pending_delta_seconds=5.0)
+        live_record = make_outcome(live_signal)
+        second_live_signal = make_signal(pending_delta_seconds=5.0)
+        second_live_signal.id = "second-live"
+        second_live_signal.asset = "GBPUSD-OTC"
+        second_live_signal.direction = "PUT"
+        second_live_record = make_outcome(second_live_signal)
+        aborted_signal = make_signal(pending_delta_seconds=5.0)
+        aborted_signal.id = "aborted"
+        aborted_record = make_outcome(aborted_signal)
+        aborted_record.status = "aborted"
+        expired_signal = make_signal(pending_delta_seconds=-90.0)
+        expired_signal.id = "expired"
+        expired_record = make_outcome(expired_signal)
+        expired_record.entry_at = now - timedelta(seconds=90)
+        expired_record.expires_at = now - timedelta(seconds=30)
+        placed_signal = make_signal(pending_delta_seconds=5.0)
+        placed_signal.id = "placed"
+        placed_record = make_outcome(placed_signal)
+        scheduled: list[tuple[str, str]] = []
+
+        engine = object.__new__(MarketEngine)
+        engine.trade_executor = FakeTradeExecutor(enabled=True, entry_window_seconds=8.0)
+        engine.trade_executor.trades = {
+            placed_record.id: BrokerTrade(
+                signal_id=placed_record.id,
+                status="placed",
+                asset=placed_record.asset,
+                direction=placed_record.direction,
+                stake_amount=placed_record.stake_amount,
+                expiration_seconds=placed_record.suggested_expiration,
+                balance_mode="PRACTICE",
+                requested_at=now,
+                placed_at=now,
+            )
+        }
+        engine.performance = SimpleNamespace(
+            records={
+                live_record.id: live_record,
+                second_live_record.id: second_live_record,
+                aborted_record.id: aborted_record,
+                expired_record.id: expired_record,
+                placed_record.id: placed_record,
+            }
+        )
+        engine._schedule_broker_entry_trade = lambda asset, signal_id: scheduled.append((asset, signal_id))
+
+        engine._restore_broker_entry_tasks()
+
+        self.assertEqual(
+            scheduled,
+            [
+                (live_record.asset, live_record.id),
+                (second_live_record.asset, second_live_record.id),
+            ],
+        )
 
     def test_can_emit_does_not_reject_stale_signal_because_broker_is_enabled(self) -> None:
         engine = object.__new__(MarketEngine)
@@ -187,6 +261,56 @@ class MarketEngineBrokerSyncTests(unittest.IsolatedAsyncioTestCase):
         await engine._execute_signal_at_entry("EURUSD-OTC", record.id)
 
         self.assertEqual(engine.trade_executor.calls, [("EURUSD-OTC", [record.id])])
+
+    async def test_execute_signal_at_entry_places_all_simultaneous_virtual_pending_records(self) -> None:
+        now = utc_now()
+        assets = ["EURUSD-OTC", "GBPUSD-OTC", "SOLUSD-OTC"]
+        records: dict[str, SignalOutcome] = {}
+        for index, asset in enumerate(assets):
+            signal = make_signal(pending_delta_seconds=-0.1)
+            signal.id = f"{asset}:60:{'CALL' if index != 1 else 'PUT'}:simultaneous:{index}"
+            signal.asset = asset
+            signal.direction = "PUT" if index == 1 else "CALL"
+            signal.stake_amount = 20000 if index == 2 else 10000
+            record = make_outcome(signal)
+            record.entry_at = now - timedelta(seconds=0.1)
+            record.expires_at = now + timedelta(seconds=60)
+            record.status = "pending"
+            records[record.id] = record
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            engine = object.__new__(MarketEngine)
+            engine.settings = SimpleNamespace(poll_interval_seconds=0.01)
+            engine.trade_executor = BrokerTradeExecutor(
+                Path(temp_dir) / "broker_trades.json",
+                enabled=True,
+                balance_mode="PRACTICE",
+                entry_window_seconds=8.0,
+                min_stake=10000,
+            )
+            engine.performance = SimpleNamespace(records=records)
+            engine.broker = RecordingTradeBroker()
+
+            await asyncio.gather(
+                *(
+                    engine._execute_signal_at_entry(record.asset, record.id)
+                    for record in records.values()
+                )
+            )
+
+        self.assertCountEqual(
+            engine.broker.calls,
+            [
+                ("EURUSD-OTC", "CALL", 10000, 60),
+                ("GBPUSD-OTC", "PUT", 10000, 60),
+                ("SOLUSD-OTC", "CALL", 20000, 60),
+            ],
+        )
+        self.assertEqual(
+            sorted(engine.trade_executor.trades),
+            sorted(records),
+        )
+        self.assertTrue(all(trade.status == "placed" for trade in engine.trade_executor.trades.values()))
 
     async def test_execute_signal_at_entry_waits_for_virtual_entry_confirmation(self) -> None:
         signal = make_signal(pending_delta_seconds=-0.1)
