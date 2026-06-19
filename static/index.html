@@ -205,7 +205,7 @@
           </section>
         </section>
 
-        <section class="live-learning" aria-label="Aprendizaje y saldo en vivo">
+        <section class="live-learning" aria-label="Analisis e historial en vivo">
           <div class="live-analysis">
             <header>
               <h3>Analisis visible</h3>
@@ -213,14 +213,13 @@
             </header>
             <pre id="liveAnalysis">Esperando vela cerrada para analizar.</pre>
           </div>
-          <div class="balance-live">
-            <header>
-              <h3>Saldo virtual</h3>
-              <strong id="virtualBalance">$50.000</strong>
+          <aside class="signals-panel signals-panel-inline">
+            <header class="signals-top">
+              <h2>Historial</h2>
+              <span id="signalCount">0</span>
             </header>
-            <p id="balanceMode">Proteccion normal</p>
-            <div id="balanceHistory" class="balance-history"></div>
-          </div>
+            <section id="signalsList" class="signals-list"></section>
+          </aside>
         </section>
 
         <section class="metrics-row">
@@ -247,12 +246,13 @@
         </section>
       </section>
 
-      <aside class="signals-panel">
-        <header class="signals-top">
-          <h2>Historial</h2>
-          <span id="signalCount">0</span>
+      <aside class="balance-live balance-panel">
+        <header>
+          <h3>Saldo virtual</h3>
+          <strong id="virtualBalance">$50.000</strong>
         </header>
-        <section id="signalsList" class="signals-list"></section>
+        <p id="balanceMode">Proteccion normal</p>
+        <div id="balanceHistory" class="balance-history"></div>
       </aside>
     </main>
 

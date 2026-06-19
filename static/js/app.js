@@ -438,7 +438,7 @@ function renderVirtualBalance() {
     return;
   }
 
-  history.slice(-12).reverse().forEach((event) => {
+  history.slice().reverse().forEach((event) => {
     const row = document.createElement("article");
     row.className = `balance-event ${balanceEventClass(event.mark)}`;
     const time = new Date(event.timestamp).toLocaleTimeString();

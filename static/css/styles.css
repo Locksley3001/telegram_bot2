@@ -53,7 +53,8 @@ button {
 
 .markets-panel,
 .chart-panel,
-.signals-panel {
+.signals-panel,
+.balance-panel {
   min-height: 0;
   height: calc(100vh - 28px);
   background: var(--panel);
@@ -64,7 +65,8 @@ button {
 }
 
 .markets-panel,
-.signals-panel {
+.signals-panel,
+.balance-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -210,6 +212,23 @@ input:focus {
 
 .signals-list {
   flex: 1 1 auto;
+}
+
+.signals-panel-inline {
+  height: auto;
+  box-shadow: none;
+}
+
+.signals-panel-inline .signals-top {
+  padding: 10px 12px;
+}
+
+.signals-panel-inline h2 {
+  font-size: 13px;
+}
+
+.signals-panel-inline .signals-list {
+  padding: 10px;
 }
 
 .market-item {
@@ -699,9 +718,32 @@ input:focus {
   font-size: 12px;
 }
 
+.balance-panel {
+  box-shadow: var(--shadow);
+}
+
+.balance-panel header {
+  padding: 18px;
+}
+
+.balance-panel h3 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.balance-panel p {
+  padding: 12px 18px;
+}
+
+.balance-panel .balance-history {
+  padding: 14px;
+}
+
 .balance-history {
   display: grid;
+  align-content: start;
   gap: 7px;
+  flex: 1 1 auto;
   min-height: 0;
   padding: 10px;
   overflow: auto;
@@ -831,7 +873,7 @@ input:focus {
     grid-template-columns: 260px minmax(360px, 1fr);
   }
 
-  .signals-panel {
+  .balance-panel {
     grid-column: 1 / -1;
     min-height: 320px;
   }
@@ -853,7 +895,8 @@ input:focus {
 
   .markets-panel,
   .chart-panel,
-  .signals-panel {
+  .signals-panel,
+  .balance-panel {
     min-height: auto;
     height: auto;
   }
