@@ -388,8 +388,19 @@ class PerformanceTracker:
     @staticmethod
     def _result_candle(record: SignalOutcome, candles: List[Candle]) -> Candle | None:
         expires_ts = record.expires_at.timestamp()
-        candidates = [candle for candle in candles if candle.timestamp >= expires_ts]
-        return candidates[0] if candidates else None
+        entry_ts = (record.entry_at or record.created_at).timestamp()
+        timeframe = max(1, int(record.timeframe or record.suggested_expiration or 60))
+        tolerance = 0.5
+        candidates = [
+            candle
+            for candle in candles
+            if candle.timestamp >= entry_ts - tolerance
+            and candle.timestamp + timeframe <= expires_ts + tolerance
+        ]
+        if candidates:
+            return candidates[-1]
+        fallback = [candle for candle in candles if candle.timestamp >= expires_ts]
+        return fallback[0] if fallback else None
 
     @classmethod
     def _buckets(cls, records: Iterable[SignalOutcome], field: str) -> List[PerformanceBucket]:

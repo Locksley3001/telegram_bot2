@@ -5,7 +5,7 @@ import unittest
 from datetime import timedelta
 from pathlib import Path
 
-from app.models import SignalOutcome, utc_now
+from app.models import Candle, SignalOutcome, utc_now
 from app.performance_tracker import PerformanceTracker
 
 
@@ -159,6 +159,50 @@ class PerformanceTrackerTests(unittest.TestCase):
         self.assertEqual(wallet.balance, 60000)
         self.assertEqual(wallet.targets_hit, 1)
         self.assertEqual(wallet.last_reset_reason, "target")
+
+    def test_evaluate_resolves_with_entry_candle_close_for_one_minute_trade(self) -> None:
+        tracker = PerformanceTracker(self.path)
+        now = utc_now().replace(microsecond=0)
+        entry_at = now - timedelta(seconds=120)
+        record = SignalOutcome.model_validate(
+            {
+                "id": "BTCUSD-OTC:60:CALL:test",
+                "asset": "BTCUSD-OTC",
+                "direction": "CALL",
+                "score": 8,
+                "strength": 2.0,
+                "continuity": 2.0,
+                "exhaustion": 1.0,
+                "cci": -120.0,
+                "entry_price": 100.0,
+                "entry_at": entry_at,
+                "stake_amount": 10000,
+                "payout_rate": 0.85,
+                "result_price": None,
+                "status": "pending",
+                "timeframe": 60,
+                "suggested_expiration": 60,
+                "created_at": entry_at - timedelta(seconds=30),
+                "expires_at": entry_at + timedelta(seconds=60),
+                "resolved_at": None,
+                "main_reason": "test",
+                "balance_after": None,
+                "abort_reason": "",
+                "is_shadow": False,
+                "blocked_reason": "",
+            }
+        )
+        tracker.records = {record.id: record}
+        candles = [
+            Candle(timestamp=entry_at.timestamp(), open=100, high=101, low=98, close=99, is_closed=True),
+            Candle(timestamp=(entry_at + timedelta(seconds=60)).timestamp(), open=99, high=104, low=99, close=103, is_closed=True),
+        ]
+
+        resolved = tracker.evaluate("BTCUSD-OTC", candles)
+
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0].result_price, 99)
+        self.assertEqual(resolved[0].status, "loss")
 
 
 if __name__ == "__main__":

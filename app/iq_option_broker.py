@@ -181,29 +181,35 @@ class IQOptionBroker(BrokerInterface):
     async def place_option_trade(self, asset: str, direction: str, amount: int, expiration_seconds: int) -> tuple[bool, str]:
         await self._ensure_connection()
         client = self._require_client()
-        asset_name = self._normalize_asset_name(asset)
+        asset_candidates = self._trade_asset_candidates(asset)
         action = direction.strip().lower()
         if action not in {"call", "put"}:
             return False, f"Direccion invalida para IQ Option: {direction}"
         duration_minutes = max(1, int(math.ceil(max(1, expiration_seconds) / 60)))
 
+        last_detail = "IQ Option rechazo la compra."
         async with self._request_lock:
-            try:
-                success, order_id = await asyncio.to_thread(
-                    client.buy,
-                    float(amount),
-                    asset_name,
-                    action,
-                    duration_minutes,
-                )
-            except Exception:
-                self._connected = False
-                raise
+            for asset_name in asset_candidates:
+                try:
+                    success, order_id = await asyncio.to_thread(
+                        client.buy,
+                        float(amount),
+                        asset_name,
+                        action,
+                        duration_minutes,
+                    )
+                except Exception:
+                    self._connected = False
+                    raise
 
-        if success is True:
-            return True, str(order_id)
-        detail = str(order_id or "IQ Option rechazo la compra.")
-        return False, detail
+                if success is True:
+                    return True, str(order_id)
+
+                last_detail = str(order_id or "IQ Option rechazo la compra.")
+                if not self._can_retry_asset_name(last_detail):
+                    break
+
+        return False, last_detail
 
     async def start_realtime_candles(self, asset: str, timeframe: int) -> None:
         await self._ensure_connection()
@@ -279,6 +285,26 @@ class IQOptionBroker(BrokerInterface):
             "NVIDIA-AMD-OTC": "NVDA/AMD-OTC",
         }
         return aliases.get(upper, upper)
+
+    @classmethod
+    def _trade_asset_candidates(cls, asset: str) -> List[str]:
+        primary = cls._normalize_asset_name(asset)
+        candidates = [primary]
+        base = primary[:-4] if primary.upper().endswith("-OTC") else primary
+        if "/" not in base and len(base) == 6 and base.isalpha():
+            candidates.append(f"{base[:3]}/{base[3:]}-OTC")
+        if "/" in base:
+            candidates.append(f"{base.replace('/', '')}-OTC")
+        unique: List[str] = []
+        for candidate in candidates:
+            if candidate not in unique:
+                unique.append(candidate)
+        return unique
+
+    @staticmethod
+    def _can_retry_asset_name(detail: str) -> bool:
+        normalized = detail.lower()
+        return "not available" in normalized or "cannot purchase" in normalized
 
     @staticmethod
     def _get_value(raw: Any, names: Iterable[str], default: Any = None) -> Any:

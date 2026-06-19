@@ -86,7 +86,7 @@ class BrokerTradeExecutor:
             return False
         if record.asset != asset or record.is_shadow:
             return False
-        if record.status not in {"waiting_entry", "pending"}:
+        if record.status != "pending":
             return False
         if record.direction not in {"CALL", "PUT"} or record.stake_amount < self.min_stake:
             return False

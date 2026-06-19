@@ -405,6 +405,20 @@ class MarketEngine:
             if any(trade.status == "placed" for trade in executed_trades):
                 LOGGER.info("Operacion enviada a IQ Option al abrir vela para %s", signal_id)
                 return
+            if record.status == "waiting_entry":
+                candles = await self.broker.get_realtime_candles(record.asset or asset, record.timeframe)
+                if len(candles) < 4:
+                    candles = await self.broker.get_candles(record.asset or asset, record.timeframe, self.settings.candle_count)
+                self.performance.evaluate(record.asset or asset, candles, self.analyzer.abort_pending_reason)
+                record = self.performance.records.get(signal_id)
+                if record is None or record.status != "pending":
+                    await asyncio.sleep(retry_interval)
+                    continue
+
+                executed_trades = await self.trade_executor.execute_due(record.asset or asset, [record], self.broker)
+                if any(trade.status == "placed" for trade in executed_trades):
+                    LOGGER.info("Operacion enviada a IQ Option al abrir vela para %s", signal_id)
+                    return
             await asyncio.sleep(retry_interval)
 
     async def _execute_due_broker_trades(self, markets: List[str]) -> None:

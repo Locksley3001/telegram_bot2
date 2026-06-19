@@ -38,6 +38,17 @@ class FakeClient:
         )
 
 
+class FakeBuyClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[float, str, str, int]] = []
+
+    def buy(self, amount: float, asset: str, action: str, duration: int):
+        self.calls.append((amount, asset, action, duration))
+        if asset == "USDJPY-OTC":
+            return False, "Cannot purchase an option (the asset is not available at the moment)."
+        return True, "order-1"
+
+
 class IQOptionBrokerTests(unittest.IsolatedAsyncioTestCase):
     async def test_realtime_candles_are_normalized_from_snapshot_values(self) -> None:
         broker = IQOptionBroker("", "")
@@ -49,6 +60,24 @@ class IQOptionBrokerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(candles), 1)
         self.assertEqual(candles[0].open, 1.0)
         self.assertEqual(candles[0].close, 1.1)
+
+    async def test_place_option_trade_retries_slash_fx_asset_name(self) -> None:
+        client = FakeBuyClient()
+        broker = IQOptionBroker("", "")
+        broker._client = client
+        broker._connected = True
+
+        success, detail = await broker.place_option_trade("USDJPY-OTC", "CALL", 20000, 60)
+
+        self.assertTrue(success)
+        self.assertEqual(detail, "order-1")
+        self.assertEqual(
+            client.calls,
+            [
+                (20000.0, "USDJPY-OTC", "call", 1),
+                (20000.0, "USD/JPY-OTC", "call", 1),
+            ],
+        )
 
 
 if __name__ == "__main__":
