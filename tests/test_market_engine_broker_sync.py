@@ -21,19 +21,19 @@ class FakeTradeExecutor:
         self.all_due_calls: list[list[str]] = []
         self.trades = {}
 
-    async def execute_due(self, asset, records, broker):
+    async def execute_due(self, asset, records, broker, **kwargs):
         records = list(records)
         self.calls.append((asset, len(records)))
         return []
 
-    async def execute_all_due(self, records, broker):
+    async def execute_all_due(self, records, broker, **kwargs):
         records = list(records)
         self.all_due_calls.append([record.id for record in records])
         return []
 
 
 class PlacingTradeExecutor(FakeTradeExecutor):
-    async def execute_due(self, asset, records, broker):
+    async def execute_due(self, asset, records, broker, **kwargs):
         records = list(records)
         self.calls.append((asset, [record.id for record in records]))
         trade = BrokerTrade(

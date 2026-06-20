@@ -5,6 +5,8 @@ __pycache__/
 .venv/
 server.log
 server-error.log
+live-server.log
+live-server-error.log
 data/*.json
 data/*.json.bak
 data/*.json.tmp

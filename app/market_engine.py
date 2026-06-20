@@ -429,6 +429,7 @@ class MarketEngine:
 
         retry_interval = max(0.05, min(0.25, float(self.settings.poll_interval_seconds)))
         while True:
+            requested_now = utc_now()
             record = self.performance.records.get(signal_id)
             if record is None:
                 return
@@ -442,7 +443,7 @@ class MarketEngine:
                 record.expires_at,
                 entry_at + timedelta(seconds=self.trade_executor.entry_window_seconds),
             )
-            if utc_now() > deadline:
+            if requested_now > deadline:
                 return
 
             if record.status == "waiting_entry":
@@ -464,22 +465,32 @@ class MarketEngine:
                     await asyncio.sleep(retry_interval)
                     continue
 
-            executed_trades = await self.trade_executor.execute_due(record.asset or asset, [record], self.broker)
+            executed_trades = await self.trade_executor.execute_due(
+                record.asset or asset,
+                [record],
+                self.broker,
+                requested_now=requested_now,
+            )
             if any(trade.status == "placed" for trade in executed_trades):
                 LOGGER.info("Operacion enviada a IQ Option al abrir vela para %s", signal_id)
                 return
             await asyncio.sleep(retry_interval)
 
-    async def _execute_due_broker_trades(self, markets: List[str]) -> None:
+    async def _execute_due_broker_trades(self, markets: List[str], *, requested_now=None) -> None:
         if not self.trade_executor.enabled:
             return
+        requested_now = requested_now or utc_now()
         market_set = set(markets)
         records = [
             record
             for record in self.performance.records.values()
             if record.asset in market_set
         ]
-        executed_trades = await self.trade_executor.execute_all_due(records, self.broker)
+        executed_trades = await self.trade_executor.execute_all_due(
+            records,
+            self.broker,
+            requested_now=requested_now,
+        )
         if executed_trades:
             LOGGER.info("Sincronizadas %s operacion(es) pendientes con IQ Option", len(executed_trades))
 
@@ -487,16 +498,20 @@ class MarketEngine:
         while not self._stop.is_set():
             try:
                 if self.trade_executor.enabled and self.broker.connected:
-                    await self._confirm_waiting_broker_entries()
-                    await self._execute_due_broker_trades(sorted(self.active_markets))
+                    requested_now = utc_now()
+                    await self._confirm_waiting_broker_entries(now=requested_now)
+                    await self._execute_due_broker_trades(
+                        sorted(self.active_markets),
+                        requested_now=requested_now,
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception:
                 LOGGER.exception("Fallo el watchdog de ejecucion broker")
             await asyncio.sleep(0.2)
 
-    async def _confirm_waiting_broker_entries(self) -> None:
-        now = utc_now()
+    async def _confirm_waiting_broker_entries(self, *, now=None) -> None:
+        now = now or utc_now()
         records = [
             record
             for record in self.performance.records.values()

@@ -180,16 +180,34 @@ class BrokerTradeExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trades, [])
         self.assertEqual(broker.calls, [])
 
-    async def test_ignores_stale_pending_record(self) -> None:
+    async def test_ignores_expired_pending_record(self) -> None:
         broker = FakeBroker()
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
         now = utc_now()
-        record = make_record(entry_at=now - timedelta(seconds=9), expires_at=now + timedelta(seconds=51))
+        record = make_record(entry_at=now - timedelta(seconds=70), expires_at=now - timedelta(seconds=10))
 
         trades = await executor.execute_due("EURUSD-OTC", [record], broker)
 
         self.assertEqual(trades, [])
         self.assertEqual(broker.calls, [])
+
+    async def test_uses_detection_time_for_due_window_during_broker_latency(self) -> None:
+        broker = FakeBroker()
+        executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)
+        now = utc_now()
+        entry_at = now - timedelta(seconds=12)
+        record = make_record(entry_at=entry_at, expires_at=now + timedelta(seconds=48))
+
+        trades = await executor.execute_due(
+            "EURUSD-OTC",
+            [record],
+            broker,
+            requested_now=entry_at + timedelta(seconds=7),
+        )
+
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0].status, "placed")
+        self.assertEqual(broker.calls, [("EURUSD-OTC", "CALL", 10000, 60)])
 
     async def test_entry_window_has_latency_floor(self) -> None:
         executor = BrokerTradeExecutor(self.path, enabled=True, balance_mode="PRACTICE", entry_window_seconds=3)

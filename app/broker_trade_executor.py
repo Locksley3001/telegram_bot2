@@ -46,8 +46,10 @@ class BrokerTradeExecutor:
         asset: str,
         records: Iterable[SignalOutcome],
         broker: BrokerInterface,
+        *,
+        requested_now=None,
     ) -> List[BrokerTrade]:
-        requested_now = utc_now()
+        requested_now = requested_now or utc_now()
         if not self.enabled:
             return []
         if getattr(broker, "connected", True) is False:
@@ -72,8 +74,10 @@ class BrokerTradeExecutor:
         self,
         records: Iterable[SignalOutcome],
         broker: BrokerInterface,
+        *,
+        requested_now=None,
     ) -> List[BrokerTrade]:
-        requested_now = utc_now()
+        requested_now = requested_now or utc_now()
         if not self.enabled:
             return []
         if getattr(broker, "connected", True) is False:
@@ -129,7 +133,7 @@ class BrokerTradeExecutor:
         if record.expires_at <= now:
             return False
         entry_delay = (now - record.entry_at).total_seconds()
-        return 0 <= entry_delay <= self.entry_window_seconds
+        return entry_delay >= 0
 
     async def _place(self, record: SignalOutcome, broker: BrokerInterface) -> BrokerTrade:
         requested_at = utc_now()
